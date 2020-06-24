@@ -10,6 +10,14 @@ func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	
 	# Spawn instance of the player 
-	var player_scene = load("res://Entities/Player/Player.tscn")
-	var player = player_scene.instance()
-	add_child(player)
+	# This way is programmatic; I did this the other way
+	# var player_scene = load("res://Entities/Player/Player.tscn")
+	# var player = player_scene.instance()
+	# add_child(player)
+	
+# Runs every frame 
+func _process(delta): 
+	
+	# Handle keyboard input not specific to the player 
+	if Input.is_action_pressed("exit"):
+		get_tree().quit()
