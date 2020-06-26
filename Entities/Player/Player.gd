@@ -2,7 +2,8 @@ extends KinematicBody
 
 const GRAVITY = -24.8
 var vel = Vector3()
-const MAX_SPEED = 20
+const MAX_SPEED = 40
+const VERTICAL_SPEED = 20
 const JUMP_SPEED = 10
 const ACCEL = 4.5
 
@@ -27,6 +28,7 @@ func process_input(_delta):
 
 	# Mapping key presses to what direction we should be going
 	var input_movement_vector = Vector2()
+	vel = Vector3()
 	if Input.is_action_pressed("move_forward"):
 		input_movement_vector.y += 1
 	if Input.is_action_pressed("move_backward"):
@@ -36,9 +38,9 @@ func process_input(_delta):
 	if Input.is_action_pressed("move_right"):
 		input_movement_vector.x += 1
 	if Input.is_action_pressed("move_up"):
-		vel.y += 1
+		vel.y += 1 * MAX_SPEED
 	if Input.is_action_pressed("move_down"):
-		vel.y -= 1
+		vel.y -= 1 * MAX_SPEED
 	input_movement_vector = input_movement_vector.normalized()
 
 	# Transforming player movement to the player's reference frame
@@ -60,7 +62,7 @@ func process_movement(delta):
 	dir = dir.normalized()
 
 	# Start out with gravity being the only downward force
-	#vel.y += delta * GRAVITY
+	# vel.y += delta * GRAVITY
 
 	var hvel = vel
 	hvel.y = 0
@@ -74,7 +76,8 @@ func process_movement(delta):
 	else:
 		accel = DEACCEL
 
-	hvel = hvel.linear_interpolate(target, accel * delta)
+	hvel = target;
+	# hvel = hvel.linear_interpolate(target, accel * delta)
 	vel.x = hvel.x
 	vel.z = hvel.z
 	vel = move_and_slide(vel, Vector3(0, 1, 0))

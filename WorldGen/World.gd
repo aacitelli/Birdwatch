@@ -1,7 +1,7 @@
 extends Spatial
 
 const chunk_size = 64
-const chunk_amount = 16
+const chunk_amount = 20
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
 var noise
