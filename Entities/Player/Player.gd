@@ -25,7 +25,7 @@ func _physics_process(delta):
 
 func process_input(_delta):
 
-	# Mapping key presses to what direction we should be going 
+	# Mapping key presses to what direction we should be going
 	var input_movement_vector = Vector2()
 	if Input.is_action_pressed("move_forward"):
 		input_movement_vector.y += 1
@@ -35,26 +35,26 @@ func process_input(_delta):
 		input_movement_vector.x -= 1
 	if Input.is_action_pressed("move_right"):
 		input_movement_vector.x += 1
-	if Input.is_action_pressed("move_up"): 
+	if Input.is_action_pressed("move_up"):
 		vel.y += 1
-	if Input.is_action_pressed("move_down"): 
+	if Input.is_action_pressed("move_down"):
 		vel.y -= 1
 	input_movement_vector = input_movement_vector.normalized()
 
-	# Transforming player movement to the player's reference frame 
+	# Transforming player movement to the player's reference frame
 	# Basis vectors are already normalized.
 	var cam_xform = camera.get_global_transform()
 	dir = Vector3()
 	dir += -cam_xform.basis.z * input_movement_vector.y
 	dir += cam_xform.basis.x * input_movement_vector.x
-	
+
 	# Jumping
 	#if is_on_floor():
 		#if Input.is_action_just_pressed("jump"):
 			#vel.y = JUMP_SPEED
 
 func process_movement(delta):
-	
+
 	# We only care about pure horizontal here, get rid of the vertical component
 	# dir.y = 0
 	dir = dir.normalized()
@@ -80,12 +80,12 @@ func process_movement(delta):
 	vel = move_and_slide(vel, Vector3(0, 1, 0))
 
 func _input(event):
-	
+
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-		
-		# Rotate up/down (around the rotation helper's axis system) 
+
+		# Rotate up/down (around the rotation helper's axis system)
 		rotation_helper.rotate_x(deg2rad(event.relative.y * MOUSE_SENSITIVITY * -1))
-		
+
 		# Rotate side to side (around y axis), scaling by 2d x-coord
 		self.rotate_y(deg2rad(event.relative.x * MOUSE_SENSITIVITY * -1))
 
