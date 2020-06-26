@@ -35,6 +35,10 @@ func process_input(_delta):
 		input_movement_vector.x -= 1
 	if Input.is_action_pressed("move_right"):
 		input_movement_vector.x += 1
+	if Input.is_action_pressed("move_up"): 
+		vel.y += 1
+	if Input.is_action_pressed("move_down"): 
+		vel.y -= 1
 	input_movement_vector = input_movement_vector.normalized()
 
 	# Transforming player movement to the player's reference frame 
@@ -45,18 +49,18 @@ func process_input(_delta):
 	dir += cam_xform.basis.x * input_movement_vector.x
 	
 	# Jumping
-	if is_on_floor():
-		if Input.is_action_just_pressed("jump"):
-			vel.y = JUMP_SPEED
+	#if is_on_floor():
+		#if Input.is_action_just_pressed("jump"):
+			#vel.y = JUMP_SPEED
 
 func process_movement(delta):
 	
 	# We only care about pure horizontal here, get rid of the vertical component
-	dir.y = 0
+	# dir.y = 0
 	dir = dir.normalized()
 
 	# Start out with gravity being the only downward force
-	vel.y += delta * GRAVITY
+	#vel.y += delta * GRAVITY
 
 	var hvel = vel
 	hvel.y = 0
@@ -79,7 +83,7 @@ func _input(event):
 	
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		
-		# Rotate up/down (around ROTATION HELPER's x axis, not the world frame), scaling by 2d y-coord
+		# Rotate up/down (around the rotation helper's axis system) 
 		rotation_helper.rotate_x(deg2rad(event.relative.y * MOUSE_SENSITIVITY * -1))
 		
 		# Rotate side to side (around y axis), scaling by 2d x-coord
