@@ -48,7 +48,7 @@ func generate_chunk():
 		# Get the vertex, set its height to the noise's generated value for that vertex, then save the changes
 		# 80 is a magic number representing how "spiky" our terrain is
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * 80
+		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * 30
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh
