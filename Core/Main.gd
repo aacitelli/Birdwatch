@@ -14,6 +14,7 @@ func _ready():
 	# var player_scene = load("res://Entities/Player/Player.tscn")
 	# var player = player_scene.instance()
 	# add_child(player)
+	pass
 	
 # Runs every frame 
 func _process(delta): 
