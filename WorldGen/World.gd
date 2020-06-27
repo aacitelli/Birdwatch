@@ -1,6 +1,6 @@
 extends Spatial
 
-const chunk_size = 64
+const chunk_size = 16
 const chunk_amount = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
@@ -8,6 +8,10 @@ var noise
 
 # Self-explanatory
 var chunks = {}
+var chunksDistance = {}
+
+# We always start out at the chunk at 0, 0
+var currentChunk = Vector2(0, 0)
 
 # Used as a lock system to make sure several threads aren't working on the same chunk at once
 var unready_chunks = {}
@@ -21,10 +25,8 @@ func _ready():
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 6
+	noise.octaves = 4
 	noise.period = 2500
-	noise.persistence = .75
-	noise.lacunarity = 2
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -75,6 +77,13 @@ func _process(_delta):
 
 func update_chunks():
 
+	# Getting rid of old chunks
+	for key in chunks:
+		var chunk = chunks[key]
+		if chunk.should_remove:
+			chunk.queue_free() # Remove from our tree
+			chunks.erase(key) # Remove from map
+
 	# Flag them as all removable
 	for key in chunks:
 		chunks[key].should_remove = true
@@ -84,26 +93,35 @@ func update_chunks():
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
 
-	# TODO: Modify this so that it goes nearest-furthest instead of row by row
-	# TODO: Make it so we only loop through this whenever the player moves to a different chunk
-	# Only display the chunks that are near the player
+	# TODO: I would call this REALLY REALLY REALLY bad code. Find a better way to do it (ideally as a heap, or make up a data structure that handles it well?)
+
+	# Map with the key being coords and the value being the distance from the player. Needs updated each frame.
+	# Instead of iterating through x/z, we pick the minimum out of this map each time.
+	chunksDistance = {}
 	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
 		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
+			var key = str(x) + "," + str(z)
+			chunksDistance[key] = sqrt((p_x - x) * (p_x - x) + (p_z - z) * (p_z - z));
 
-			# Actually go through the rigamarole of generating
-			add_chunk(x, z)
+	# Each iteration, we pick out the minimum distance
+	while chunksDistance.size() > 0:
+		var minimum = dict_minimum_value(chunksDistance)
+		chunksDistance.erase(minimum);
 
-			# If it's one that currently exists and within player range, don't get rid of it
-			var chunk = get_chunk(x, z)
-			if chunk != null:
-				chunk.should_remove = false
+		# This is messy; We have to extract the coordinates from the key itself
+		var x = int(minimum.substr(0, minimum.find(",")))
+		var z = int(minimum.substr(minimum.find(",") + 1, -1))
 
-	for key in chunks:
-		var chunk = chunks[key]
-		if chunk.should_remove:
-			chunk.queue_free() # Remove from our tree
-			chunks.erase(key) # Remove from map
+		# Actually add the chunk and make sure it doesn't essentially get garbage collected
+		add_chunk(x, z)
+		var chunk = get_chunk(x, z)
+		if chunk != null:
+			chunk.should_remove = false
 
-
-
-
+# Returns the key (or an arbitrary one of them) that has the minimum numerical value associated with it from a dict
+func dict_minimum_value(dict):
+	var min_value = dict.values().min()
+	var keys = dict.keys()
+	for key in keys:
+		if dict[key] == min_value:
+			return key

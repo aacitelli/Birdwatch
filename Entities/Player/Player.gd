@@ -2,8 +2,8 @@ extends KinematicBody
 
 const GRAVITY = -24.8
 var vel = Vector3()
-const MAX_SPEED = 300
-const VERTICAL_SPEED = 20
+const MAX_SPEED = 500
+const VERTICAL_SPEED = 50
 const JUMP_SPEED = 10
 const ACCEL = 4.5
 
