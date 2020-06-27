@@ -2,7 +2,7 @@ extends KinematicBody
 
 const GRAVITY = -24.8
 var vel = Vector3()
-const MAX_SPEED = 40
+const MAX_SPEED = 300
 const VERTICAL_SPEED = 20
 const JUMP_SPEED = 10
 const ACCEL = 4.5
@@ -47,8 +47,8 @@ func process_input(_delta):
 	# Basis vectors are already normalized.
 	var cam_xform = camera.get_global_transform()
 	dir = Vector3()
-	dir += -cam_xform.basis.z * input_movement_vector.y
-	dir += cam_xform.basis.x * input_movement_vector.x
+	dir += -input_movement_vector.y * cam_xform.basis.z
+	dir += input_movement_vector.x * cam_xform.basis.x
 
 	# Jumping
 	#if is_on_floor():
@@ -82,6 +82,7 @@ func process_movement(delta):
 	vel.z = hvel.z
 	vel = move_and_slide(vel, Vector3(0, 1, 0))
 
+# Works like a dream, never touch again
 func _input(event):
 
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:

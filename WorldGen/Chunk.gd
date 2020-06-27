@@ -10,6 +10,10 @@ var x
 var z
 var chunk_size
 
+var should_remove
+
+export var MAX_HEIGHT = 1000
+
 func _init(noise, x, z, chunk_size):
 
 	self.noise = noise
@@ -31,6 +35,9 @@ func generate_chunk():
 	plane_mesh.subdivide_depth = chunk_size * .5
 	plane_mesh.subdivide_width = chunk_size * .5
 
+	# Giving it the material we designed
+	plane_mesh.material = load("res://WorldGen/terrain.material")
+
 	# Declaring Godot stuff we're going to use to draw the environment
 	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code
 	var data_tool = MeshDataTool.new() # Lets us grab vertices from stuff we already generated
@@ -48,7 +55,7 @@ func generate_chunk():
 		# Get the vertex, set its height to the noise's generated value for that vertex, then save the changes
 		# 80 is a magic number representing how "spiky" our terrain is
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * 30
+		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + (MAX_HEIGHT / 2)
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh

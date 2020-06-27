@@ -1,7 +1,7 @@
 extends Spatial
 
 const chunk_size = 64
-const chunk_amount = 20
+const chunk_amount = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
 var noise
@@ -22,7 +22,9 @@ func _ready():
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
 	noise.octaves = 6
-	noise.period = 80
+	noise.period = 2500
+	noise.persistence = .75
+	noise.lacunarity = 2
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -68,25 +70,40 @@ func get_chunk(x, z):
 	else:
 		return null
 
-func _process(delta):
+func _process(_delta):
 	update_chunks()
-	clean_up_chunks()
-	reset_chunks()
 
 func update_chunks():
+
+	# Flag them as all removable
+	for key in chunks:
+		chunks[key].should_remove = true
 
 	# Getting the position of the player in terms of grid units
 	var player_translation = $Player.translation
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
 
+	# TODO: Modify this so that it goes nearest-furthest instead of row by row
+	# TODO: Make it so we only loop through this whenever the player moves to a different chunk
 	# Only display the chunks that are near the player
 	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
 		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
-			add_chunk(x, z) # This function handles correctly if we've already created that one
 
-func clean_up_chunks():
-	pass
+			# Actually go through the rigamarole of generating
+			add_chunk(x, z)
 
-func reset_chunks():
-	pass
+			# If it's one that currently exists and within player range, don't get rid of it
+			var chunk = get_chunk(x, z)
+			if chunk != null:
+				chunk.should_remove = false
+
+	for key in chunks:
+		var chunk = chunks[key]
+		if chunk.should_remove:
+			chunk.queue_free() # Remove from our tree
+			chunks.erase(key) # Remove from map
+
+
+
+
