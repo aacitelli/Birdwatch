@@ -4,7 +4,9 @@ const chunk_size = 16
 const chunk_load_radius = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
-var noise
+var noise_layer_1
+var noise_layer_2
+var noise_layer_3
 
 # Self-explanatory
 var chunks = {}
@@ -21,12 +23,22 @@ var p_z
 
 func _ready():
 
-	# Define noise parameters
 	randomize()
-	noise = OpenSimplexNoise.new()
-	noise.seed = randi()
-	noise.octaves = 6
-	noise.period = 1200
+
+	noise_layer_1 = OpenSimplexNoise.new()
+	noise_layer_1.seed = randi()
+	noise_layer_1.octaves = 4
+	noise_layer_1.period = 200
+
+	noise_layer_2 = OpenSimplexNoise.new()
+	noise_layer_2.seed = randi()
+	noise_layer_2.octaves = 4
+	noise_layer_2.period = 200
+
+	noise_layer_3 = OpenSimplexNoise.new()
+	noise_layer_3.seed = randi()
+	noise_layer_3.octaves = 4
+	noise_layer_3.period = 200
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -53,7 +65,12 @@ func load_chunk(arr):
 	var z = arr[2]
 
 	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
-	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size)
+	var chunk = Chunk.new(noise_layer_1,
+		noise_layer_2,
+		noise_layer_3,
+		x * chunk_size,
+		z * chunk_size,
+		chunk_size)
 	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
 
 	# Signify that it's done whenever the chunk isn't busy
