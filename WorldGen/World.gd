@@ -8,7 +8,6 @@ var noise
 
 # Self-explanatory
 var chunks = {}
-var chunksDistance = {}
 
 # Used as a lock system to make sure several threads aren't working on the same chunk at once
 var unready_chunks = {}
@@ -16,14 +15,18 @@ var unready_chunks = {}
 # We use threading so it doesn't lock up the main thread and actually lag
 var thread
 
+# Holds grid position of player; Updated every frame
+var p_x
+var p_z
+
 func _ready():
 
 	# Define noise parameters
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 4
-	noise.period = 500
+	noise.octaves = 6
+	noise.period = 1200
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -32,12 +35,10 @@ func add_chunk(chunk_key):
 
 	# If this chunk has already been generated or is currently being generated, don't generate
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
-		# print("Chunk " + str(chunk_key) + " has already been created or is currently being created. Skipping.")
 		return
 
 	if not thread.is_active():
-		# print("Chunk " + str(chunk_key) + " has NOT already been created. Starting thread on it.")
-		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y], Thread.PRIORITY_HIGH)
+		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
 		unready_chunks[chunk_key] = 1
 
 	else:
@@ -59,10 +60,6 @@ func load_chunk(arr):
 	call_deferred("load_done", chunk, thread)
 
 func load_done(chunk, thread):
-
-	# print("load_done called.")
-	# print("Chunk: " + str(chunk))
-
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
@@ -76,22 +73,23 @@ func get_chunk(chunk_key):
 		return null
 
 func _process(_delta):
+
+	# Need updated player positioning values
+	p_x = int($Player.translation.x) / chunk_size
+	p_z = int($Player.translation.z) / chunk_size
+
+	# Update which chunks are and aren't loaded
 	load_closest_unloaded_chunk()
 	remove_far_chunks()
 
+# TODO: Modify to prioritize circularly instead of in a square, because the user sees circularly.
 func load_closest_unloaded_chunk():
 
-	# Build a map of every chunk and its distance from the player
-	var player_translation = $Player.translation
-	var p_x = int(player_translation.x) / chunk_size
-	var p_z = int(player_translation.z) / chunk_size
-
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
-	# Makes it so we don't have to figure out which are closest every frame, which is a HUGE performance boost.
+	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
+	# Makes it so we don't have to figure out which are closest every frame by doing actual math - big performance boost
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
-
-		# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive)
 		add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
 		for i in range(1, 2 * current_radius + 1):
 			add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
@@ -101,8 +99,6 @@ func load_closest_unloaded_chunk():
 			add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
 		for i in range(1, 2 * current_radius):
 			add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
-
-		# Advance layer to next
 		current_radius += 1
 
 func remove_far_chunks():
@@ -124,5 +120,5 @@ func remove_far_chunks():
 	for key in chunks:
 		var chunk = chunks[key]
 		if chunk.should_remove:
-			chunk.queue_free()
+			chunk.queue_free() # Removes from tree as soon as nothing needs its information (i.e. end of frame)
 			chunks.erase(key)

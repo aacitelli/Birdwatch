@@ -53,7 +53,7 @@ func generate_chunk():
 	for i in range(data_tool.get_vertex_count()):
 
 		# Get the vertex, set its height to the noise's generated value for that vertex, then save the changes
-		# 80 is a magic number representing how "spiky" our terrain is
+		# The noise generates [-1, 1] so we adjust by adding half of this range i.e. 1
 		var vertex = data_tool.get_vertex(i)
 		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + (MAX_HEIGHT / 2)
 		data_tool.set_vertex(i, vertex)
@@ -71,6 +71,8 @@ func generate_chunk():
 	# MeshInstance is the component actually rendered in the world
 	mesh_instance = MeshInstance.new()
 	mesh_instance.mesh = surface_tool.commit() # Set it to whatever's contained in the SurfaceTool
-	mesh_instance.create_trimesh_collision() # Creates a node that is essentially a different representation of we have
+	# mesh_instance.create_trimesh_collision() # Creates a node that is essentially a different representation of we have
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 	add_child(mesh_instance)
+
+
