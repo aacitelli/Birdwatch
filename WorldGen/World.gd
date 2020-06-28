@@ -112,7 +112,7 @@ func remove_far_chunks():
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
 	for x in range(p_x - chunk_load_radius, p_x + chunk_load_radius):
-		for z in range(p_z - chunk_load_radius, p_x + chunk_load_radius):
+		for z in range(p_z - chunk_load_radius, p_z + chunk_load_radius):
 			if chunks.has(Vector2(x, z)):
 				chunks[Vector2(x, z)].should_remove = false
 
