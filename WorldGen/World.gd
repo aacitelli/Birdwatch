@@ -1,7 +1,7 @@
 extends Spatial
 
 const chunk_size = 16
-const chunk_load_radius = 64
+const chunk_load_radius = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
 var noise
@@ -85,9 +85,9 @@ func _process(_delta):
 # TODO: Modify to prioritize circularly instead of in a square, because the user sees circularly.
 func load_closest_unloaded_chunk():
 
-	# Whichever add_chunk call happens first grabs the thread. We call add_chunk on closer chunks first, so in effect,
-	# this makes it so closer chunks are prioritized and show up sooner.
+	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
+	# Makes it so we don't have to figure out which are closest every frame by doing actual math - big performance boost
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
 		add_chunk(Vector2(p_x + current_radius, p_z + current_radius))

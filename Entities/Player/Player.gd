@@ -2,7 +2,8 @@ extends KinematicBody
 
 const GRAVITY = -24.8
 var vel = Vector3()
-const MAX_SPEED = 20
+const MAX_SPEED = 100
+const VERTICAL_SPEED = 20
 const JUMP_SPEED = 10
 const ACCEL = 4.5
 
@@ -25,8 +26,9 @@ func _physics_process(delta):
 
 func process_input(_delta):
 
-	# Mapping key presses to what direction we should be going 
+	# Mapping key presses to what direction we should be going
 	var input_movement_vector = Vector2()
+	vel = Vector3()
 	if Input.is_action_pressed("move_forward"):
 		input_movement_vector.y += 1
 	if Input.is_action_pressed("move_backward"):
@@ -35,28 +37,32 @@ func process_input(_delta):
 		input_movement_vector.x -= 1
 	if Input.is_action_pressed("move_right"):
 		input_movement_vector.x += 1
+	if Input.is_action_pressed("move_up"):
+		vel.y += 1 * MAX_SPEED
+	if Input.is_action_pressed("move_down"):
+		vel.y -= 1 * MAX_SPEED
 	input_movement_vector = input_movement_vector.normalized()
 
-	# Transforming player movement to the player's reference frame 
+	# Transforming player movement to the player's reference frame
 	# Basis vectors are already normalized.
 	var cam_xform = camera.get_global_transform()
 	dir = Vector3()
-	dir += -cam_xform.basis.z * input_movement_vector.y
-	dir += cam_xform.basis.x * input_movement_vector.x
-	
+	dir += -input_movement_vector.y * cam_xform.basis.z
+	dir += input_movement_vector.x * cam_xform.basis.x
+
 	# Jumping
-	if is_on_floor():
-		if Input.is_action_just_pressed("jump"):
-			vel.y = JUMP_SPEED
+	#if is_on_floor():
+		#if Input.is_action_just_pressed("jump"):
+			#vel.y = JUMP_SPEED
 
 func process_movement(delta):
-	
+
 	# We only care about pure horizontal here, get rid of the vertical component
-	dir.y = 0
+	# dir.y = 0
 	dir = dir.normalized()
 
 	# Start out with gravity being the only downward force
-	vel.y += delta * GRAVITY
+	# vel.y += delta * GRAVITY
 
 	var hvel = vel
 	hvel.y = 0
@@ -70,18 +76,20 @@ func process_movement(delta):
 	else:
 		accel = DEACCEL
 
-	hvel = hvel.linear_interpolate(target, accel * delta)
+	hvel = target;
+	# hvel = hvel.linear_interpolate(target, accel * delta)
 	vel.x = hvel.x
 	vel.z = hvel.z
 	vel = move_and_slide(vel, Vector3(0, 1, 0))
 
+# Works like a dream, never touch again
 func _input(event):
-	
+
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-		
-		# Rotate up/down (around ROTATION HELPER's x axis, not the world frame), scaling by 2d y-coord
+
+		# Rotate up/down (around the rotation helper's axis system)
 		rotation_helper.rotate_x(deg2rad(event.relative.y * MOUSE_SENSITIVITY * -1))
-		
+
 		# Rotate side to side (around y axis), scaling by 2d x-coord
 		self.rotate_y(deg2rad(event.relative.x * MOUSE_SENSITIVITY * -1))
 
