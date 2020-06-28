@@ -10,9 +10,6 @@ var noise
 var chunks = {}
 var chunksDistance = {}
 
-# We always start out at the chunk at 0, 0
-var currentChunk = Vector2(0, 0)
-
 # Used as a lock system to make sure several threads aren't working on the same chunk at once
 var unready_chunks = {}
 
@@ -25,24 +22,27 @@ func _ready():
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 4
+	noise.octaves = 3
 	noise.period = 2500
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
 
-func add_chunk(x, z):
-
-	# Key we use for the chunks map
-	var key = str(x) + "," + str(z)
+func add_chunk(chunk_key):
 
 	# If this chunk has already been generated or is currently being generated, don't generate
-	if chunks.has(key) or unready_chunks.has(key):
+	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
+		# print("Chunk " + str(chunk_key) + " has already been created or is currently being created. Skipping.")
 		return
 
 	if not thread.is_active():
-		thread.start(self, "load_chunk", [thread, x, z])
-		unready_chunks[key] = 1
+		print("Chunk " + str(chunk_key) + " has NOT already been created. Starting thread on it.")
+		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
+		unready_chunks[chunk_key] = 1
+
+	else:
+		# print("Thread was active when trying to add chunk " + str(chunk_key))
+		pass
 
 func load_chunk(arr):
 
@@ -51,72 +51,83 @@ func load_chunk(arr):
 	var x = arr[1]
 	var z = arr[2]
 
+	print("load_chunk called with coords " + str(Vector2(x, z)))
+
 	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
 	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size)
 	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
+
+	print("Created the chunk and set translation. Calling load_done deferred.")
 
 	# Signify that it's done whenever the chunk isn't busy
 	call_deferred("load_done", chunk, thread)
 
 func load_done(chunk, thread):
+
+	print("load_done called.")
+	# print("Chunk: " + str(chunk))
+
 	add_child(chunk)
-	var key = str(chunk.x / chunk_size) + "," + str(chunk.z / chunk_size)
-	chunks[key] = chunk
-	unready_chunks.erase(key)
+	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
+	chunks[chunk_key] = chunk
+	unready_chunks.erase(chunk_key)
 	thread.wait_to_finish()
 
-func get_chunk(x, z):
-	var key = str(x) + "," + str(z)
-	if chunks.has(key):
-		return chunks.get(key)
+func get_chunk(chunk_key):
+	if chunks.has(chunk_key):
+		return chunks.get(chunk_key)
 	else:
 		return null
 
 func _process(_delta):
-	update_chunks()
+	load_closest_unloaded_chunk()
+	remove_far_chunks()
 
-func update_chunks():
+func load_closest_unloaded_chunk():
 
-	# Getting rid of old chunks
-	for key in chunks:
-		var chunk = chunks[key]
-		if chunk.should_remove:
-			chunk.queue_free() # Remove from our tree
-			chunks.erase(key) # Remove from map
-
-	# Flag them as all removable
-	for key in chunks:
-		chunks[key].should_remove = true
-
-	# Getting the position of the player in terms of grid units
+	# Build a map of every chunk and its distance from the player
 	var player_translation = $Player.translation
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
 
-	# TODO: I would call this REALLY REALLY REALLY bad code. Find a better way to do it (ideally as a heap, or make up a data structure that handles it well?)
-
-	# Map with the key being coords and the value being the distance from the player. Needs updated each frame.
-	# Instead of iterating through x/z, we pick the minimum out of this map each time.
+	# Building a map of every chunk within our distance this frame
 	chunksDistance = {}
 	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
 		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
-			var key = str(x) + "," + str(z)
-			chunksDistance[key] = sqrt((p_x - x) * (p_x - x) + (p_z - z) * (p_z - z));
+			chunksDistance[Vector2(x, z)] = sqrt((p_x - x) * (p_x - x) + (p_z - z) * (p_z - z)); # Save its distance
 
-	# Each iteration, we pick out the minimum distance
+	# TODO: Instead of getting min every time (O(n^2)), sort then always take first element (O(n*logn))
+	# Actually add whatever the minimum distance one was
 	while chunksDistance.size() > 0:
-		var minimum = dict_minimum_value(chunksDistance)
-		chunksDistance.erase(minimum);
 
-		# This is messy; We have to extract the coordinates from the key itself
-		var x = int(minimum.substr(0, minimum.find(",")))
-		var z = int(minimum.substr(minimum.find(",") + 1, -1))
+		# Pick out the minimum distance key, then try it. If it does successfully take the thread, the other ones
+		# will be blocked off from taking the thread and they'll essentially be skipped regardless this frame.
+		var min_chunk_key = dict_minimum_value(chunksDistance)
+		add_chunk(min_chunk_key)
 
-		# Actually add the chunk and make sure it doesn't essentially get garbage collected
-		add_chunk(x, z)
-		var chunk = get_chunk(x, z)
-		if chunk != null:
-			chunk.should_remove = false
+		chunksDistance.erase(min_chunk_key)
+
+func remove_far_chunks():
+
+	# Set them all as needing removal
+	for chunk in chunks.values():
+		chunk.should_remove = true
+
+	# Iterate through the close ones and flag them as not needing removed
+	var player_translation = $Player.translation
+	var p_x = int(player_translation.x) / chunk_size
+	var p_z = int(player_translation.z) / chunk_size
+	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
+		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
+			if chunks.has(Vector2(x, z)):
+				chunks[Vector2(x, z)].should_remove = false
+
+	# Remove the far ones alllll the way
+	for key in chunks:
+		var chunk = chunks[key]
+		if chunk.should_remove:
+			chunk.queue_free()
+			chunks.erase(key)
 
 # Returns the key (or an arbitrary one of them) that has the minimum numerical value associated with it from a dict
 func dict_minimum_value(dict):
@@ -125,3 +136,6 @@ func dict_minimum_value(dict):
 	for key in keys:
 		if dict[key] == min_value:
 			return key
+
+
+
