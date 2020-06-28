@@ -1,7 +1,7 @@
 extends Spatial
 
 const chunk_size = 16
-const chunk_amount = 16
+const chunk_load_radius = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
 var noise
@@ -22,8 +22,8 @@ func _ready():
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 3
-	noise.period = 2500
+	noise.octaves = 4
+	noise.period = 500
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -36,8 +36,8 @@ func add_chunk(chunk_key):
 		return
 
 	if not thread.is_active():
-		print("Chunk " + str(chunk_key) + " has NOT already been created. Starting thread on it.")
-		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
+		# print("Chunk " + str(chunk_key) + " has NOT already been created. Starting thread on it.")
+		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y], Thread.PRIORITY_HIGH)
 		unready_chunks[chunk_key] = 1
 
 	else:
@@ -51,20 +51,16 @@ func load_chunk(arr):
 	var x = arr[1]
 	var z = arr[2]
 
-	print("load_chunk called with coords " + str(Vector2(x, z)))
-
 	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
 	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size)
 	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
-
-	print("Created the chunk and set translation. Calling load_done deferred.")
 
 	# Signify that it's done whenever the chunk isn't busy
 	call_deferred("load_done", chunk, thread)
 
 func load_done(chunk, thread):
 
-	print("load_done called.")
+	# print("load_done called.")
 	# print("Chunk: " + str(chunk))
 
 	add_child(chunk)
@@ -90,22 +86,24 @@ func load_closest_unloaded_chunk():
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
 
-	# Building a map of every chunk within our distance this frame
-	chunksDistance = {}
-	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
-		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
-			chunksDistance[Vector2(x, z)] = sqrt((p_x - x) * (p_x - x) + (p_z - z) * (p_z - z)); # Save its distance
+	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
+	# Makes it so we don't have to figure out which are closest every frame, which is a HUGE performance boost.
+	var current_radius = 0
+	while current_radius < chunk_load_radius:
 
-	# TODO: Instead of getting min every time (O(n^2)), sort then always take first element (O(n*logn))
-	# Actually add whatever the minimum distance one was
-	while chunksDistance.size() > 0:
+		# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive)
+		add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+		for i in range(1, 2 * current_radius + 1):
+			add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
+		for i in range(1, 2 * current_radius + 1):
+			add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
+		for i in range(1, 2 * current_radius + 1):
+			add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
+		for i in range(1, 2 * current_radius):
+			add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
 
-		# Pick out the minimum distance key, then try it. If it does successfully take the thread, the other ones
-		# will be blocked off from taking the thread and they'll essentially be skipped regardless this frame.
-		var min_chunk_key = dict_minimum_value(chunksDistance)
-		add_chunk(min_chunk_key)
-
-		chunksDistance.erase(min_chunk_key)
+		# Advance layer to next
+		current_radius += 1
 
 func remove_far_chunks():
 
@@ -117,25 +115,14 @@ func remove_far_chunks():
 	var player_translation = $Player.translation
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
-	for x in range(p_x - chunk_amount * .5, p_x + chunk_amount * .5):
-		for z in range(p_z - chunk_amount * .5, p_x + chunk_amount * .5):
+	for x in range(p_x - chunk_load_radius, p_x + chunk_load_radius):
+		for z in range(p_z - chunk_load_radius, p_x + chunk_load_radius):
 			if chunks.has(Vector2(x, z)):
 				chunks[Vector2(x, z)].should_remove = false
 
-	# Remove the far ones alllll the way
+	# Remove anything that doesn't have that flag set
 	for key in chunks:
 		var chunk = chunks[key]
 		if chunk.should_remove:
 			chunk.queue_free()
 			chunks.erase(key)
-
-# Returns the key (or an arbitrary one of them) that has the minimum numerical value associated with it from a dict
-func dict_minimum_value(dict):
-	var min_value = dict.values().min()
-	var keys = dict.keys()
-	for key in keys:
-		if dict[key] == min_value:
-			return key
-
-
-
