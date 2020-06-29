@@ -4,9 +4,7 @@ const chunk_size = 16
 const chunk_load_radius = 16
 
 # Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
-var noise_layer_1
-var noise_layer_2
-var noise_layer_3
+var noise
 
 # Self-explanatory
 var chunks = {}
@@ -24,21 +22,10 @@ var p_z
 func _ready():
 
 	randomize()
-
-	noise_layer_1 = OpenSimplexNoise.new()
-	noise_layer_1.seed = randi()
-	noise_layer_1.octaves = 4
-	noise_layer_1.period = 200
-
-	noise_layer_2 = OpenSimplexNoise.new()
-	noise_layer_2.seed = randi()
-	noise_layer_2.octaves = 4
-	noise_layer_2.period = 200
-
-	noise_layer_3 = OpenSimplexNoise.new()
-	noise_layer_3.seed = randi()
-	noise_layer_3.octaves = 4
-	noise_layer_3.period = 200
+	noise = OpenSimplexNoise.new()
+	noise.seed = randi()
+	noise.octaves = 3
+	noise.period = 200
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()
@@ -53,10 +40,6 @@ func add_chunk(chunk_key):
 		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
 		unready_chunks[chunk_key] = 1
 
-	else:
-		# print("Thread was active when trying to add chunk " + str(chunk_key))
-		pass
-
 func load_chunk(arr):
 
 	# When you give a thread a function to run, is passed in as array
@@ -65,12 +48,7 @@ func load_chunk(arr):
 	var z = arr[2]
 
 	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
-	var chunk = Chunk.new(noise_layer_1,
-		noise_layer_2,
-		noise_layer_3,
-		x * chunk_size,
-		z * chunk_size,
-		chunk_size)
+	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size)
 	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
 
 	# Signify that it's done whenever the chunk isn't busy

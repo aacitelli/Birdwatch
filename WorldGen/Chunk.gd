@@ -9,18 +9,14 @@ var x
 var z
 var chunk_size
 
-var noise_layer_1
-var noise_layer_2
-var noise_layer_3
+var noise
 
 var should_remove
 
 export var MAX_HEIGHT = 200
 
-func _init(noise_layer_1, noise_layer_2, noise_layer_3, x, z, chunk_size):
-	self.noise_layer_1 = noise_layer_1
-	self.noise_layer_2 = noise_layer_2
-	self.noise_layer_3 = noise_layer_3
+func _init(noise, x, z, chunk_size):
+	self.noise = noise
 	self.x = x
 	self.z = z
 	self.chunk_size = chunk_size
@@ -53,10 +49,8 @@ func generate_chunk():
 
 	# Iterate through every vertex that is in the plane
 	for i in range(data_tool.get_vertex_count()):
-		# Get the vertex, set its height to the noise's generated value for that vertex, then save the changes
-		# The noise generates [-1, 1] so we adjust by adding half of this range i.e. 1
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = (noise_layer_1.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + .5 * 	noise_layer_2.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + .25 * noise_layer_3.get_noise_3d(vertex.x + 	x, vertex.y, vertex.z + z) * MAX_HEIGHT) + (MAX_HEIGHT / 2)
+		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + (MAX_HEIGHT / 2)
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh
