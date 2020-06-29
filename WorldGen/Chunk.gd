@@ -14,7 +14,7 @@ var noise
 var should_remove
 
 var MAX_HEIGHT = 100
-var water_level = MAX_HEIGHT * .25
+var water_level = MAX_HEIGHT * .245
 
 # warning-ignore:shadowed_variable
 # warning-ignore:shadowed_variable
@@ -31,6 +31,10 @@ func _init(noise, x, z, chunk_size):
 func _ready():
 	generate_water()
 	generate_chunk()
+
+# var time_before = OS.get_ticks_usec()
+# var total_time = OS.get_ticks_usec() - time_before
+# print("generate_chunk(): plane_mesh time taken: " + str(total_time))
 
 func generate_chunk():
 
@@ -56,7 +60,12 @@ func generate_chunk():
 	# Iterate through every vertex that is in the plane
 	for i in range(data_tool.get_vertex_count()):
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) * MAX_HEIGHT + (MAX_HEIGHT / 2)
+		var noise_value = noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z) # Generate noise
+		noise_value *= 1.2
+		var normalized_noise_value = (noise_value + 1) / 2 # Transform range from [-1, 1] to [0, 1]
+		var height_map = pow(normalized_noise_value, 1.6)
+		var height_value = height_map * MAX_HEIGHT
+		vertex.y = floor(height_value)
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh

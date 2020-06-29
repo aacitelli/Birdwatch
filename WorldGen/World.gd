@@ -4,6 +4,10 @@ const chunk_size = 16
 const chunk_load_radius = 16
 
 var noise
+var counter = 0
+
+var fps_count = 0
+var fps_measurements = 0
 
 # Self-explanatory
 var chunks = {}
@@ -15,6 +19,7 @@ var unready_chunks = {}
 # Increasing number of threads speeds it up (more chunks being generated each _process call), but means each _process call takes a little longer (i.e. less framerate). 4 seems to be a good middle ground of reasonably fast loading while leaving reasonably good performance.
 var threads = []
 var num_threads = 4
+var num_busy_threads_this_frame # Used to stop our chunk draw calls after we use up all the threads, rather than looping through the rest
 
 # Holds grid position of player; Updated every frame
 var p_x
@@ -27,9 +32,9 @@ func _ready():
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
 	noise.octaves = 6
-	noise.period = 150
+	noise.period = 220
 
-	# Initialize threads
+	# Instantiate threads
 	for i in range(num_threads):
 		threads.append(Thread.new())
 
@@ -40,13 +45,11 @@ func add_chunk(chunk_key):
 		return
 
 	# Only need to reset everything once per process call, not every time we run a thread
-	var cleared_frames_yet = false
 	for thread in threads:
 		if not thread.is_active():
-			if not cleared_frames_yet:
-				remove_far_chunks()
-				cleared_frames_yet = true
+			remove_far_chunks()
 			var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
+			num_busy_threads_this_frame += 1
 			unready_chunks[chunk_key] = 1
 			break
 
@@ -70,7 +73,6 @@ func load_done(chunk, thread):
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 	thread.wait_to_finish()
-	# print("Loaded chunk @ " + str(chunk_key))
 
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
@@ -78,13 +80,13 @@ func get_chunk(chunk_key):
 	else:
 		return null
 
-var frameNum = 0
 func _process(_delta):
 
 	# Don't want to overflow the terminal, keep this to being output every second or two
-	frameNum += 1
-	if frameNum % 120 == 0:
-		print("fps: " + str(Engine.get_frames_per_second()))
+	fps_count += Engine.get_frames_per_second()
+	fps_measurements += 1
+	if fps_measurements % 300 == 0:
+		print("fps: " + str(fps_count / fps_measurements))
 
 	# var time_before = OS.get_ticks_usec()
 
@@ -94,6 +96,7 @@ func _process(_delta):
 	player_pos = Vector2(p_x, p_z)
 
 	# Update which chunks are and aren't loaded
+	num_busy_threads_this_frame = 0
 	remove_far_chunks()
 	load_closest_unloaded_chunk()
 
@@ -114,27 +117,39 @@ func load_closest_unloaded_chunk():
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
 
+		# If we're full on threads, none of these calls will amount to everything, check before we g
+		if num_busy_threads_this_frame >= num_threads:
+			return
+
 		# Top-right box
 		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 			add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
 
 		# Down the right edge
 		for i in range(1, 2 * current_radius + 1):
+			if num_busy_threads_this_frame >= num_threads:
+				return
 			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
 
 		# Left across the bottom edge
 		for i in range(1, 2 * current_radius + 1):
+			if num_busy_threads_this_frame >= num_threads:
+				return
 			if Vector2(p_x + current_radius - i, p_z - current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
 
 		# Up the left edge
 		for i in range(1, 2 * current_radius + 1):
+			if num_busy_threads_this_frame >= num_threads:
+				return
 			if Vector2(p_x - current_radius, p_z - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
 
 		# Right across the top edge (excluding where we started)
 		for i in range(1, 2 * current_radius):
+			if num_busy_threads_this_frame >= num_threads:
+				return
 			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
 
