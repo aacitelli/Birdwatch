@@ -13,6 +13,7 @@ var chunks = {}
 var unready_chunks = {}
 
 # We use threading so it doesn't lock up the main thread and actually lag
+# Increasing number of threads speeds it up (more chunks being generated each _process call), but means each _process call takes a little longer (i.e. less framerate). 4 seems to be a good middle ground of reasonably fast loading while leaving reasonably good performance.
 var threads = []
 var num_threads = 4
 
@@ -69,7 +70,7 @@ func load_done(chunk, thread):
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 	thread.wait_to_finish()
-	print("Loaded chunk @ " + str(chunk_key))
+	# print("Loaded chunk @ " + str(chunk_key))
 
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
@@ -77,7 +78,13 @@ func get_chunk(chunk_key):
 	else:
 		return null
 
+var frameNum = 0
 func _process(_delta):
+
+	# Don't want to overflow the terminal, keep this to being output every second or two
+	frameNum += 1
+	if frameNum % 60 == 0:
+		OS.set_window_title("Birdwatch" + " | fps: " + str(Engine.get_frames_per_second()))
 
 	# var time_before = OS.get_ticks_usec()
 
@@ -132,10 +139,11 @@ func remove_far_chunks():
 	var player_translation = $Player.translation
 	var p_x = int(player_translation.x) / chunk_size
 	var p_z = int(player_translation.z) / chunk_size
-	for x in range(p_x - chunk_load_radius, p_x + chunk_load_radius):
-		for z in range(p_z - chunk_load_radius, p_z + chunk_load_radius):
-			if chunks.has(Vector2(x, z)):
-				chunks[Vector2(x, z)].should_remove = false
+
+	# Iterate through every chunk in our list, setting the flag if it's within range
+	for chunk in chunks.values():
+		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
+			chunk.should_remove = false
 
 	# Remove anything that doesn't have that flag set
 	for key in chunks:

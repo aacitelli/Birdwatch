@@ -5,14 +5,16 @@ class_name Chunk
 
 # World gen overall variables
 var x
+var x_grid
 var z
+var z_grid
 var chunk_size
 
 var noise
 var should_remove
 
 var MAX_HEIGHT = 100
-var water_level = MAX_HEIGHT * .2
+var water_level = MAX_HEIGHT * .25
 
 # warning-ignore:shadowed_variable
 # warning-ignore:shadowed_variable
@@ -21,7 +23,9 @@ var water_level = MAX_HEIGHT * .2
 func _init(noise, x, z, chunk_size):
 	self.noise = noise
 	self.x = x
+	self.x_grid = x / chunk_size
 	self.z = z
+	self.z_grid = z / chunk_size
 	self.chunk_size = chunk_size
 
 func _ready():
