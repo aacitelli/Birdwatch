@@ -24,8 +24,8 @@ func _ready():
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 3
-	noise.period = 200
+	noise.octaves = 2
+	noise.period = 80
 
 	# We don't generate this on the main thread or else it would lock up all the time
 	thread = Thread.new()

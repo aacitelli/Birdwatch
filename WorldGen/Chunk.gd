@@ -10,10 +10,10 @@ var z
 var chunk_size
 
 var noise
-
 var should_remove
 
-export var MAX_HEIGHT = 200
+var MAX_HEIGHT = 50
+var water_level = MAX_HEIGHT * .175
 
 func _init(noise, x, z, chunk_size):
 	self.noise = noise
@@ -22,6 +22,7 @@ func _init(noise, x, z, chunk_size):
 	self.chunk_size = chunk_size
 
 func _ready():
+	generate_water()
 	generate_chunk()
 
 func generate_chunk():
@@ -34,7 +35,7 @@ func generate_chunk():
 	plane_mesh.subdivide_width = chunk_size * .5
 
 	# Giving it the material we designed
-	plane_mesh.material = load("res://WorldGen/terrain.material")
+	plane_mesh.material = preload("res://WorldGen/terrain.material")
 
 	# Declaring Godot stuff we're going to use to draw the environment
 	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code
@@ -59,15 +60,24 @@ func generate_chunk():
 
 	# Start actually drrawingawing based on the ArrayMesh we were given
 	data_tool.commit_to_surface(array_plane)
-	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLE_FAN)
 	surface_tool.create_from(array_plane, 0)
 	surface_tool.generate_normals() # Presumably used for collision stuff; Generates what's 90deg from our plane.
 
 	# MeshInstance is the component actually rendered in the world
 	mesh_instance = MeshInstance.new()
 	mesh_instance.mesh = surface_tool.commit() # Set it to whatever's contained in the SurfaceTool
-	# mesh_instance.create_trimesh_collision() # Creates a node that is essentially a different representation of we have
+	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
+	add_child(mesh_instance)
+
+func generate_water():
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = Vector2(chunk_size, chunk_size)
+	plane_mesh.material = preload("res://WorldGen/water.material")
+	var mesh_instance = MeshInstance.new()
+	mesh_instance.mesh = plane_mesh
+	mesh_instance.translation.y = water_level
 	add_child(mesh_instance)
 
 
