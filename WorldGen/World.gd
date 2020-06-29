@@ -13,7 +13,8 @@ var chunks = {}
 var unready_chunks = {}
 
 # We use threading so it doesn't lock up the main thread and actually lag
-var thread
+var threads = []
+var num_threads = 4
 
 # Holds grid position of player; Updated every frame
 var p_x
@@ -24,11 +25,12 @@ func _ready():
 	randomize()
 	noise = OpenSimplexNoise.new()
 	noise.seed = randi()
-	noise.octaves = 2
-	noise.period = 80
+	noise.octaves = 6
+	noise.period = 150
 
-	# We don't generate this on the main thread or else it would lock up all the time
-	thread = Thread.new()
+	# Initialize threads
+	for i in range(num_threads):
+		threads.append(Thread.new())
 
 func add_chunk(chunk_key):
 
@@ -36,9 +38,16 @@ func add_chunk(chunk_key):
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
 		return
 
-	if not thread.is_active():
-		var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
-		unready_chunks[chunk_key] = 1
+	# Only need to reset everything once per process call, not every time we run a thread
+	var cleared_frames_yet = false
+	for thread in threads:
+		if not thread.is_active():
+			if not cleared_frames_yet:
+				remove_far_chunks()
+				cleared_frames_yet = true
+			var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
+			unready_chunks[chunk_key] = 1
+			break
 
 func load_chunk(arr):
 
@@ -60,6 +69,7 @@ func load_done(chunk, thread):
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 	thread.wait_to_finish()
+	print("Loaded chunk @ " + str(chunk_key))
 
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
@@ -69,16 +79,27 @@ func get_chunk(chunk_key):
 
 func _process(_delta):
 
+	# var time_before = OS.get_ticks_usec()
+
 	# Need updated player positioning values
 	p_x = int($Player.translation.x) / chunk_size
 	p_z = int($Player.translation.z) / chunk_size
 
 	# Update which chunks are and aren't loaded
-	load_closest_unloaded_chunk()
 	remove_far_chunks()
+	load_closest_unloaded_chunk()
+
+	# var total_time = OS.get_ticks_usec() - time_before
+	# print("_process() time taken (us): " + str(total_time))
+
+# var time_before = OS.get_ticks_msec()
+# var total_time = OS.get_ticks_msec() - time_before
+# print("Time taken: " + str(total_time))
 
 # TODO: Modify to prioritize circularly instead of in a square, because the user sees circularly.
 func load_closest_unloaded_chunk():
+
+	# var time_before = OS.get_ticks_usec()
 
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
@@ -96,7 +117,12 @@ func load_closest_unloaded_chunk():
 			add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
 		current_radius += 1
 
+	# var total_time = OS.get_ticks_usec() - time_before
+	# print("load_closest_unloaded_chunk() time taken (us): " + str(total_time))
+
 func remove_far_chunks():
+
+	# var time_before = OS.get_ticks_usec()
 
 	# Set them all as needing removal
 	for chunk in chunks.values():
@@ -117,3 +143,6 @@ func remove_far_chunks():
 		if chunk.should_remove:
 			chunk.queue_free() # Removes from tree as soon as nothing needs its information (i.e. end of frame)
 			chunks.erase(key)
+
+	# var total_time = OS.get_ticks_usec() - time_before
+	# print("remove_far_chunks() time taken (us): " + str(total_time))
