@@ -3,7 +3,6 @@ extends Spatial
 const chunk_size = 16
 const chunk_load_radius = 16
 
-# Used to generate the height map and all sorts of fun stuff... foundation for everything we're doing
 var noise
 
 # Self-explanatory
@@ -20,6 +19,7 @@ var num_threads = 4
 # Holds grid position of player; Updated every frame
 var p_x
 var p_z
+var player_pos
 
 func _ready():
 
@@ -83,14 +83,15 @@ func _process(_delta):
 
 	# Don't want to overflow the terminal, keep this to being output every second or two
 	frameNum += 1
-	if frameNum % 60 == 0:
-		OS.set_window_title("Birdwatch" + " | fps: " + str(Engine.get_frames_per_second()))
+	if frameNum % 120 == 0:
+		print("fps: " + str(Engine.get_frames_per_second()))
 
 	# var time_before = OS.get_ticks_usec()
 
 	# Need updated player positioning values
 	p_x = int($Player.translation.x) / chunk_size
 	p_z = int($Player.translation.z) / chunk_size
+	player_pos = Vector2(p_x, p_z)
 
 	# Update which chunks are and aren't loaded
 	remove_far_chunks()
@@ -110,18 +111,33 @@ func load_closest_unloaded_chunk():
 
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
-	# Makes it so we don't have to figure out which are closest every frame by doing actual math - big performance boost
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
-		add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+
+		# Top-right box
+		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
+			add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+
+		# Down the right edge
 		for i in range(1, 2 * current_radius + 1):
-			add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
+			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
+
+		# Left across the bottom edge
 		for i in range(1, 2 * current_radius + 1):
-			add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
+			if Vector2(p_x + current_radius - i, p_z - current_radius).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
+
+		# Up the left edge
 		for i in range(1, 2 * current_radius + 1):
-			add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
+			if Vector2(p_x - current_radius, p_z - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
+
+		# Right across the top edge (excluding where we started)
 		for i in range(1, 2 * current_radius):
-			add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
+			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
+
 		current_radius += 1
 
 	# var total_time = OS.get_ticks_usec() - time_before
@@ -135,12 +151,8 @@ func remove_far_chunks():
 	for chunk in chunks.values():
 		chunk.should_remove = true
 
-	# Iterate through the close ones and flag them as not needing removed
-	var player_translation = $Player.translation
-	var p_x = int(player_translation.x) / chunk_size
-	var p_z = int(player_translation.z) / chunk_size
-
 	# Iterate through every chunk in our list, setting the flag if it's within range
+	# More efficient than iterating row by row through n^2 elements, especially if most won't be loaded
 	for chunk in chunks.values():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
 			chunk.should_remove = false

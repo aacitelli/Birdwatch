@@ -24,6 +24,10 @@ config/name="Birdwatch"
 run/main_scene="res://Core/Main.tscn"
 config/icon="res://icon.png"
 
+[display]
+
+window/vsync/use_vsync=false
+
 [input]
 
 move_forward={
@@ -73,5 +77,4 @@ move_down={
 
 [rendering]
 
-threads/thread_model=2
 environment/default_environment="res://default_env.tres"
