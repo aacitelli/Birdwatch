@@ -34,7 +34,9 @@ func _ready():
 	noise.octaves = 6
 	noise.period = 220
 
-	# Instantiate threads
+	generate_percentiles()
+
+	# Instantiate threads we use for terrain generation
 	for i in range(num_threads):
 		threads.append(Thread.new())
 
@@ -181,3 +183,27 @@ func remove_far_chunks():
 
 	# var total_time = OS.get_ticks_usec() - time_before
 	# print("remove_far_chunks() time taken (us): " + str(total_time))
+
+# Perlin noise is essentially a random distribution. We have to use *percentiles*, not actual heights relative to the max. I generated these once before and just put the hardcoded numbers into shader and chunk classes.
+func generate_percentiles():
+
+	var horiz_lower = -10000000
+	var horiz_upper = 10000000
+	var horiz_step = 100000
+	var y_lower = 0
+	var y_upper = 100
+	var y_step = 5
+
+	var height_map = []
+	for x in range(horiz_lower, horiz_upper, horiz_step):
+		for y in range(y_lower, y_upper, y_step):
+			for z in range(horiz_lower, horiz_upper, horiz_step):
+				height_map.append((noise.get_noise_3d(x, y, z) + 1) / 2)
+
+	height_map.sort()
+
+	var percentiles = []
+	for percentile in range(0, 100, 1):
+		percentiles.append(height_map[floor(height_map.size() * percentile * .01)])
+
+	print(str(percentiles))
