@@ -1,7 +1,9 @@
 extends Spatial
 
 const chunk_size = 16
-const chunk_load_radius = 32
+
+# Having this too high then actually loading that many makes the game HELLA LAGGY
+const chunk_load_radius = 16
 
 var noise
 var counter = 0
@@ -20,6 +22,7 @@ var unready_chunks = {}
 var threads = []
 var num_threads = 4
 var num_busy_threads_this_frame # Used to stop our chunk draw calls after we use up all the threads, rather than looping through the rest
+var remove_chunks_thread
 
 # Holds grid position of player; Updated every frame
 var p_x
@@ -47,6 +50,8 @@ func _ready():
 	# Instantiate threads we use for terrain generation
 	for i in range(num_threads):
 		threads.append(Thread.new())
+
+	remove_chunks_thread = Thread.new()
 
 func add_chunk(chunk_key):
 
@@ -121,6 +126,9 @@ func _process(_delta):
 func load_closest_unloaded_chunk():
 
 	# var time_before = OS.get_ticks_usec()
+
+	# Get the thread working on removing those first
+	# remove_far_chunks()
 
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"

@@ -9,6 +9,7 @@
 background_mode = 2
 background_sky = SubResource( 5 )
 ssao_enabled = true
+ssao_bias = 1.0
 
 [sub_resource type="CubeMesh" id=1]
 
