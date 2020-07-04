@@ -34,7 +34,7 @@ func _init(noise, x, z, chunk_size, max_height):
 func _ready():
 
 	# Grab this value from the parent
-	self.water_level = get_node("/root/World/World").percentiles[25]
+	self.water_level = get_node("/root/WorldEnvironment/World/World").percentiles[25]
 
 	# Actually start off generation stuff
 	generate_water()
@@ -50,8 +50,8 @@ func generate_chunk():
 	# TODO: Docs aren't very helpful as to what some of these characteristics mean, figure them out
 	var plane_mesh = PlaneMesh.new()
 	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.subdivide_depth = chunk_size * .5
-	plane_mesh.subdivide_width = chunk_size * .5
+	plane_mesh.subdivide_depth = chunk_size * .06125
+	plane_mesh.subdivide_width = chunk_size * .06125
 
 	# Well, Godot doesn't support passing arrays into shaders, so this is the hacky approach...
 	# See issue here https://github.com/godotengine/godot/issues/10751
@@ -71,7 +71,7 @@ func generate_chunk():
 	# Iterate through every vertex that is in the plane
 	for i in range(data_tool.get_vertex_count()):
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = get_node("/root/World/World").noise_to_height(noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
+		vertex.y = get_node("/root/WorldEnvironment/World/World").noise_to_height(noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh

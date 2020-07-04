@@ -1,7 +1,7 @@
 extends Spatial
 
 const chunk_size = 16
-const chunk_load_radius = 16
+const chunk_load_radius = 32
 
 var noise
 var counter = 0
