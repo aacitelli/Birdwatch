@@ -3,7 +3,7 @@ extends Spatial
 const chunk_size = 16
 
 # Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 16
+const chunk_load_radius = 64
 
 var noise
 var counter = 0
@@ -137,13 +137,7 @@ func _process(_delta):
 	# var total_time = OS.get_ticks_usec() - time_before
 	# print("_process() time taken (us): " + str(total_time))
 
-# This is reset to 0 each frame. We catch the signal emitted here, rather than in the function, because we have
-# no way of knowing what it "returns" otherwise
-func _on_World_loaded_chunk():
-	chunks_loading_this_frame += 1
-	print("loaded_chunk signal fired. Now have loaded " + str(chunks_loading_this_frame) + " chunks this frame.")
-
-# var time_before = OS.get_ticks_msec()
+# var time_before = OS.get_ticks_msec()c
 # var total_time = OS.get_ticks_msec() - time_before
 # print("Time taken: " + str(total_time))
 func load_closest_n_chunks(num_chunks_to_load):
@@ -152,12 +146,20 @@ func load_closest_n_chunks(num_chunks_to_load):
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
+		
+		# Top-right spot; If we include this as part of the last loop there's a weird edge case at (0, 0) so this is separate
+		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					print("Loaded enough chunks this frame.")
+					return
 
 		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
 		for i in range(1, 2 * current_radius + 1):
 			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
 				if chunks_loading_this_frame >= num_chunks_to_load:
+					print("Loaded enough chunks this frame.")
 					return
 
 		# Left across the bottom edge
@@ -176,8 +178,8 @@ func load_closest_n_chunks(num_chunks_to_load):
 					print("Loaded enough chunks this frame.")
 					return
 
-		# Right across the top edge (including top-right)
-		for i in range(1, 2 * current_radius + 1):
+		# Right across the top edge (excluding top-right)
+		for i in range(1, 2 * current_radius):
 			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:

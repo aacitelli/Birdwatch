@@ -3,19 +3,19 @@
 [ext_resource path="res://Core/Main.gd" type="Script" id=1]
 [ext_resource path="res://WorldGen/World.tscn" type="PackedScene" id=2]
 
-[sub_resource type="CubeMesh" id=3]
+[sub_resource type="CubeMesh" id=1]
 
-[sub_resource type="SpatialMaterial" id=4]
+[sub_resource type="SpatialMaterial" id=2]
 albedo_color = Color( 0.172549, 0.329412, 0.184314, 1 )
 
-[sub_resource type="ConvexPolygonShape" id=5]
+[sub_resource type="ConvexPolygonShape" id=3]
 points = PoolVector3Array( 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1 )
 
-[sub_resource type="ProceduralSky" id=1]
+[sub_resource type="ProceduralSky" id=4]
 
-[sub_resource type="Environment" id=2]
+[sub_resource type="Environment" id=5]
 background_mode = 2
-background_sky = SubResource( 1 )
+background_sky = SubResource( 4 )
 ssao_bias = 1.0
 dof_blur_near_enabled = true
 
@@ -28,14 +28,14 @@ visible = false
 
 [node name="Mesh" type="MeshInstance" parent="Floor"]
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0.000881863, -0.116634, -0.00466669 )
-mesh = SubResource( 3 )
-material/0 = SubResource( 4 )
+mesh = SubResource( 1 )
+material/0 = SubResource( 2 )
 
 [node name="Collision" type="CollisionShape" parent="Floor"]
-shape = SubResource( 5 )
+shape = SubResource( 3 )
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource( 2 )
+environment = SubResource( 5 )
 
 [node name="World" parent="WorldEnvironment" instance=ExtResource( 2 )]
 
