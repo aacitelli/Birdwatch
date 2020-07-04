@@ -33,8 +33,8 @@ func _init(noise, x, z, chunk_size, max_height):
 
 func _ready():
 
-	# Grab this value from the parent
-	self.water_level = get_node("/root/WorldEnvironment/World/World").percentiles[25]
+	# Grab this value from the parent (ready function ensures parent is also ready)
+	self.water_level = get_node("/root/Main/WorldEnvironment/World").percentiles[25]
 
 	# Actually start off generation stuff
 	generate_water()
@@ -71,7 +71,7 @@ func generate_chunk():
 	# Iterate through every vertex that is in the plane
 	for i in range(data_tool.get_vertex_count()):
 		var vertex = data_tool.get_vertex(i)
-		vertex.y = get_node("/root/WorldEnvironment/World/World").noise_to_height(noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
+		vertex.y = get_node("/root/Main/WorldEnvironment/World").noise_to_height(noise.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
 		data_tool.set_vertex(i, vertex)
 
 	# Remove everything from the ArrayMesh

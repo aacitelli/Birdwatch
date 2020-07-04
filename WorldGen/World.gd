@@ -19,16 +19,17 @@ var unready_chunks = {}
 
 # We use threading so it doesn't lock up the main thread and actually lag
 # Increasing number of threads speeds it up (more chunks being generated each _process call), but means each _process call takes a little longer (i.e. less framerate). 4 seems to be a good middle ground of reasonably fast loading while leaving reasonably good performance.
-var threads = []
-var num_threads = 4
-var num_busy_threads_this_frame # Used to stop our chunk draw calls after we use up all the threads, rather than looping through the rest
-var remove_chunks_thread
+var thread
 
 # Holds grid position of player; Updated every frame
 var p_x
 var p_z
 var player_pos
 var MAX_HEIGHT = 100
+
+var chunks_loading_this_frame
+
+signal loaded_chunk
 
 # Percentiles are used for stuff like biome selection and shading b/c perlin noise is (close to) a normal distribution
 # This scales by (MAX_HEIGHT) / 100th percentiles so stuff like mountains are at the highest peak
@@ -44,14 +45,8 @@ func _ready():
 	noise.octaves = 6
 	noise.period = 220
 
-	# Uncomment if you need to generate new height percentiles
-	# generate_percentiles()
-
 	# Instantiate threads we use for terrain generation
-	for i in range(num_threads):
-		threads.append(Thread.new())
-
-	remove_chunks_thread = Thread.new()
+	thread = Thread.new()
 
 func add_chunk(chunk_key):
 
@@ -60,13 +55,13 @@ func add_chunk(chunk_key):
 		return
 
 	# Only need to reset everything once per process call, not every time we run a thread
-	for thread in threads:
-		if not thread.is_active():
-			remove_far_chunks()
-			var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
-			num_busy_threads_this_frame += 1
-			unready_chunks[chunk_key] = 1
-			break
+	#if not thread.is_active():
+		#print("Yah.")
+		#var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
+	print("Chunk " + str(chunk_key) + " doesn't exist yet. Calling load_chunk().")
+	chunks_loading_this_frame += 1
+	load_chunk([thread, chunk_key.x, chunk_key.y])
+	unready_chunks[chunk_key] = 1
 
 func load_chunk(arr):
 
@@ -79,15 +74,21 @@ func load_chunk(arr):
 	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size, MAX_HEIGHT)
 	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
 
-	# Signify that it's done whenever the chunk isn't busy
+	# Wait until the main thread isn't busy to go ahead and add this one to the tree
 	call_deferred("load_done", chunk, thread)
 
+# Adds the chunk to the tree whenever the main thread isn't busy
 func load_done(chunk, thread):
+
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
-	thread.wait_to_finish()
+	# thread.wait_to_finish()
+	print("Finished loading chunk " + str(chunk_key) + " all the way through. Firing all the signals.")
+
+	# Have to emit loaded_chunk first because the calling function compares with the value the callback modifies
+	emit_signal("loaded_chunk")
 
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
@@ -95,7 +96,12 @@ func get_chunk(chunk_key):
 	else:
 		return null
 
+var num_process_calls = 0
 func _process(_delta):
+
+	num_process_calls += 1
+	print("\n-----------------------\n")
+	print("Process call #" + str(num_process_calls))
 
 	# Don't want to overflow the terminal, keep this to being output every second or two
 	fps_count += Engine.get_frames_per_second()
@@ -110,75 +116,80 @@ func _process(_delta):
 	p_z = int($Player.translation.z) / chunk_size
 	player_pos = Vector2(p_x, p_z)
 
-	# Update which chunks are and aren't loaded
-	num_busy_threads_this_frame = 0
-	remove_far_chunks()
-	load_closest_unloaded_chunk()
+	# First, the thread removes chunks that are too far away
+	#if not thread.is_active():
+	#	print("Thread wasn't busy; calling remove_far_chunks.")
+	#	var error = remove_chunks_thread.start(self, "remove_far_chunks")
+	#	print(error)
+
+	# Terrain generation will go full steam until it hits another
+	chunks_loading_this_frame = 0
+
+	# Will be a more thought-out system in the future (and probably be on a different thread), but this is a basic
+	# implementation of loading a little quicker when you want to render more chunks overall
+	var chunks_per_frame = floor(chunk_load_radius * (5.0/7))
+	print("calling load_closest_n_chunks with param " + str(chunks_per_frame))
+	load_closest_n_chunks(chunks_per_frame)
+
+	#if not remove_chunks_thread.is_active():
+	#	remove_chunks_thread.start(self, "remove_far_chunks", [remove_chunks_thread])
 
 	# var total_time = OS.get_ticks_usec() - time_before
 	# print("_process() time taken (us): " + str(total_time))
 
+# This is reset to 0 each frame. We catch the signal emitted here, rather than in the function, because we have
+# no way of knowing what it "returns" otherwise
+func _on_World_loaded_chunk():
+	chunks_loading_this_frame += 1
+	print("loaded_chunk signal fired. Now have loaded " + str(chunks_loading_this_frame) + " chunks this frame.")
+
 # var time_before = OS.get_ticks_msec()
 # var total_time = OS.get_ticks_msec() - time_before
 # print("Time taken: " + str(total_time))
-
-# TODO: Modify to prioritize circularly instead of in a square, because the user sees circularly.
-func load_closest_unloaded_chunk():
-
-	# var time_before = OS.get_ticks_usec()
-
-	# Get the thread working on removing those first
-	# remove_far_chunks()
+func load_closest_n_chunks(num_chunks_to_load):
 
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
 
-		# If we're full on threads, none of these calls will amount to everything, check before we g
-		if num_busy_threads_this_frame >= num_threads:
-			return
-
-		# Top-right box
-		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
-			add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
-
-		# Down the right edge
+		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
 		for i in range(1, 2 * current_radius + 1):
-			if num_busy_threads_this_frame >= num_threads:
-				return
 			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					return
 
 		# Left across the bottom edge
 		for i in range(1, 2 * current_radius + 1):
-			if num_busy_threads_this_frame >= num_threads:
-				return
 			if Vector2(p_x + current_radius - i, p_z - current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					print("Loaded enough chunks this frame.")
+					return
 
 		# Up the left edge
 		for i in range(1, 2 * current_radius + 1):
-			if num_busy_threads_this_frame >= num_threads:
-				return
 			if Vector2(p_x - current_radius, p_z - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					print("Loaded enough chunks this frame.")
+					return
 
-		# Right across the top edge (excluding where we started)
-		for i in range(1, 2 * current_radius):
-			if num_busy_threads_this_frame >= num_threads:
-				return
+		# Right across the top edge (including top-right)
+		for i in range(1, 2 * current_radius + 1):
 			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					print("Loaded enough chunks this frame.")
+					return
 
+		# Move on to the next ring of the "spiral"
 		current_radius += 1
-
-	# var total_time = OS.get_ticks_usec() - time_before
-	# print("load_closest_unloaded_chunk() time taken (us): " + str(total_time))
 
 func remove_far_chunks():
 
-	# var time_before = OS.get_ticks_usec()
+	print("Made it into remove_far_chunks")
 
 	# Set them all as needing removal
 	for chunk in chunks.values():
@@ -194,11 +205,9 @@ func remove_far_chunks():
 	for key in chunks:
 		var chunk = chunks[key]
 		if chunk.should_remove:
+			print("Removing chunk at (" + str(chunk.x_grid) + "," + str(chunk.z_grid) + ")")
 			chunk.queue_free() # Removes from tree as soon as nothing needs its information (i.e. end of frame)
 			chunks.erase(key)
-
-	# var total_time = OS.get_ticks_usec() - time_before
-	# print("remove_far_chunks() time taken (us): " + str(total_time))
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
@@ -244,5 +253,4 @@ func generate_percentiles():
 
 	print("Percentiles: " + str(percentiles))
 	print("Scaling Factor: " + str(scaling_factor))
-
 
