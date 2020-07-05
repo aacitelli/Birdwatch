@@ -85,47 +85,35 @@ func get_chunk(chunk_key):
 	else:
 		return null
 
+# Tracks frames processed. Used to conditionally run certain things that run regularly, but don't need to run every frame.
 var num_process_calls = 0
+
+# Runs every frame
 func _process(_delta):
 
-	# num_process_calls += 1
+	num_process_calls += 1
 	# print("\n-----------------------\n")
 	# print("Process call #" + str(num_process_calls))
-
-	# Don't want to overflow the terminal, keep this to being output every second or two
-	fps_count += Engine.get_frames_per_second()
-	fps_measurements += 1
-	if fps_measurements % 300 == 0:
-		print("fps: " + str(fps_count / fps_measurements))
-
-	# var time_before = OS.get_ticks_usec()
 
 	# Need updated player positioning values
 	p_x = int($Player.translation.x) / chunk_size
 	p_z = int($Player.translation.z) / chunk_size
 	player_pos = Vector2(p_x, p_z)
 
-	# First, the thread removes chunks that are too far away
-	#if not thread.is_active():
-	#	print("Thread wasn't busy; calling remove_far_chunks.")
-	#	var error = remove_chunks_thread.start(self, "remove_far_chunks")
-	#	print(error)
-
 	# Terrain generation will go full steam until it hits another
 	chunks_loading_this_frame = 0
 
 	# Will be a more thought-out system in the future (and probably be on a different thread), but this is a basic
 	# implementation of loading a little quicker when you want to render more chunks overall
-	var chunks_per_frame = floor(chunk_load_radius * (5.0 / 7))
+	var chunks_per_frame = floor(chunk_load_radius * (3.0 / 7))
 	load_closest_n_chunks(chunks_per_frame)
 
-	# Remove everything further than our "draw distance"
-	# The most we ever have to remove per frame is the max we can ever generate per frame, so we use the same number
+	# Call this five times a second. We want to run this as little as possible (to avoid too many searches through ALL our chunks), but we can't make this interval too much, or else there'll be mini lag spikes when this function does run.
 	remove_far_chunks(chunks_per_frame)
 
-# var time_before = OS.get_ticks_msec()c
-# var total_time = OS.get_ticks_msec() - time_before
-# print("Time taken: " + str(total_time))
+	# total_time = OS.get_ticks_usec() - time_before
+	# print("remove_far_chunks time taken (us): " + str(total_time))
+
 func load_closest_n_chunks(num_chunks_to_load):
 
 	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
@@ -135,9 +123,9 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 		# Top-right spot; If we include this as part of the last loop there's a weird edge case at (0, 0) so this is separate
 		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
+			add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+			if chunks_loading_this_frame >= num_chunks_to_load:
+				return
 
 		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
 		for i in range(1, 2 * current_radius + 1):
@@ -170,21 +158,13 @@ func load_closest_n_chunks(num_chunks_to_load):
 		# Move on to the next ring of the "spiral"
 		current_radius += 1
 
+# TODO: Modify chunks data structure to be something I sort highest to lowest distance every frame (adding new chunks to the end), then in this function I can just remove from the beginning until I hit something within range.
+# TODO: Benchmark the above approach. The above approach is *technically* worse theta complexity because of the sort, but because I only really have to do it when the user changes chunks and that makes this function drastically quicker (still technically same theta complexity) it's probably a performance improvement. This is where a large chunk of my performance is used anyway.
 func remove_far_chunks(max_chunks_removed):
 
 	# Set them all as needing removal
 	for chunk in chunks.values():
-		chunk.should_remove = true
-
-	# Iterate through every chunk in our list, setting the flag if it's within range
-	# More efficient than iterating row by row through n^2 elements, especially if most won't be loaded
-	for chunk in chunks.values():
-		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
-			chunk.should_remove = false
-
-	# Get rid of everything that's outside chunk removal range. We need to do this because chunks take memory and it won't take us long to hit memory cap.
-	for chunk in chunks.values():
-		if chunk.should_remove:
+		if not Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk.key)
 
