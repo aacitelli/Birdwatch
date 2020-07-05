@@ -3,7 +3,7 @@ extends Spatial
 const chunk_size = 16
 
 # Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 64
+const chunk_load_radius = 16
 
 var noise
 var counter = 0
@@ -79,16 +79,10 @@ func load_chunk(arr):
 
 # Adds the chunk to the tree whenever the main thread isn't busy
 func load_done(chunk, thread):
-
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
-	# thread.wait_to_finish()
-	print("Finished loading chunk " + str(chunk_key) + " all the way through. Firing all the signals.")
-
-	# Have to emit loaded_chunk first because the calling function compares with the value the callback modifies
-	emit_signal("loaded_chunk")
 
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
@@ -127,15 +121,12 @@ func _process(_delta):
 
 	# Will be a more thought-out system in the future (and probably be on a different thread), but this is a basic
 	# implementation of loading a little quicker when you want to render more chunks overall
+	# This is calculated here instead of just one global value b/c I might eventually make this number adjust to be a little higher if the user is above their fps goal
 	var chunks_per_frame = floor(chunk_load_radius * (5.0/7))
-	print("calling load_closest_n_chunks with param " + str(chunks_per_frame))
 	load_closest_n_chunks(chunks_per_frame)
 
-	#if not remove_chunks_thread.is_active():
-	#	remove_chunks_thread.start(self, "remove_far_chunks", [remove_chunks_thread])
-
-	# var total_time = OS.get_ticks_usec() - time_before
-	# print("_process() time taken (us): " + str(total_time))
+	# Remove everything further than our "draw distance"
+	remove_far_chunks()
 
 # var time_before = OS.get_ticks_msec()c
 # var total_time = OS.get_ticks_msec() - time_before
@@ -151,7 +142,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:
-					print("Loaded enough chunks this frame.")
 					return
 
 		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
@@ -159,7 +149,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
 				if chunks_loading_this_frame >= num_chunks_to_load:
-					print("Loaded enough chunks this frame.")
 					return
 
 		# Left across the bottom edge
@@ -167,7 +156,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 			if Vector2(p_x + current_radius - i, p_z - current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:
-					print("Loaded enough chunks this frame.")
 					return
 
 		# Up the left edge
@@ -175,7 +163,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 			if Vector2(p_x - current_radius, p_z - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
 				if chunks_loading_this_frame >= num_chunks_to_load:
-					print("Loaded enough chunks this frame.")
 					return
 
 		# Right across the top edge (excluding top-right)
@@ -183,7 +170,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:
-					print("Loaded enough chunks this frame.")
 					return
 
 		# Move on to the next ring of the "spiral"
@@ -191,24 +177,33 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 func remove_far_chunks():
 
-	print("Made it into remove_far_chunks")
-
 	# Set them all as needing removal
 	for chunk in chunks.values():
 		chunk.should_remove = true
+		
+	print("Flagged " + str(chunks.size()) + " chunks as needing removal.")
 
 	# Iterate through every chunk in our list, setting the flag if it's within range
 	# More efficient than iterating row by row through n^2 elements, especially if most won't be loaded
+	var num_valid_chunks = 0
 	for chunk in chunks.values():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
+			num_valid_chunks += 1
 			chunk.should_remove = false
+			
+	print("Flagged " + str(num_valid_chunks) + " as good.")
 
 	# Remove anything that doesn't have that flag set
+	var num_chunks_removed_this_frame = 0
+	print(chunks.size())
 	for key in chunks:
 		var chunk = chunks[key]
+		print("chunk: " + str(chunk))
 		if chunk.should_remove:
+			num_chunks_removed_this_frame += 1
+			print("num_chunks_removed_this_frame: " + str(num_chunks_removed_this_frame))
 			print("Removing chunk at (" + str(chunk.x_grid) + "," + str(chunk.z_grid) + ")")
-			chunk.queue_free() # Removes from tree as soon as nothing needs its information (i.e. end of frame)
+			chunk.queue_free()
 			chunks.erase(key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
