@@ -1,46 +1,48 @@
 extends Spatial
 
+# Constants we pass into each chunk
 const chunk_size = 16
+const chunk_load_radius = 16
 
-# Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 32
+# Height & Moisture Map Generation
+var height_map_noise
+var moisture_map_noise
+var scaling_factor # Scale everything up to our max height after noise generation
+var MAX_HEIGHT = 100
 
-var noise
-var counter = 0
+# Our data structures to keep track of chunks in our game
+var chunks = {} # Already loaded, just have to redraw
+var unready_chunks = {} # Currently being generated (i.e.) by a thread
+var chunks_loading_this_frame # Current system generates n chunks every frame b/c it's not threaded; This will be fixed in a future release
 
-var fps_count = 0
-var fps_measurements = 0
-
-var chunks = {}
-var unready_chunks = {}
-
-# We use threading so it doesn't lock up the main thread and actually lag
-# Increasing number of threads speeds it up (more chunks being generated each _process call), but means each _process call takes a little longer (i.e. less framerate). 4 seems to be a good middle ground of reasonably fast loading while leaving reasonably good performance.
-var thread
+# Vector2 representing player grid position
+var player_pos
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
-# Holds grid position of player; Updated every frame
-var p_x
-var p_z
-var player_pos
-var MAX_HEIGHT = 100
-
-var chunks_loading_this_frame
-
-# Percentiles are used for stuff like biome selection and shading b/c perlin noise is (close to) a normal distribution
-# This scales by (MAX_HEIGHT) / 100th percentiles so stuff like mountains are at the highest peak
-# TODO: Change this so higher elevations are more affected by this factor than lower elevations; This encourages flat valley
-var percentiles = [0.0, 1.505341, 7.632018, 9.185752, 10.364989, 11.342104, 12.216771, 13.003863, 13.721631, 14.40905, 15.052256, 15.658445, 16.250783, 16.842891, 17.400959, 17.955556, 18.492428, 19.01891, 19.537059, 20.045917, 20.55768, 21.066959, 21.555269, 22.049592, 22.533336, 23.017872, 23.496444, 23.982136, 24.460706, 24.942196, 25.419172, 25.894695, 26.380204, 26.866319, 27.357257, 27.842024, 28.333987, 28.816342, 29.307511, 29.802381, 30.297803, 30.802878, 31.30655, 31.817094, 32.322951, 32.836693, 33.349779, 33.869027, 34.397418, 34.931128, 35.457711, 36.005438, 36.540574, 37.088591, 37.646806, 38.210823, 38.775153, 39.345643, 39.93007, 40.528796, 41.123418, 41.734075, 42.353434, 42.982263, 43.620069, 44.266529, 44.942727, 45.611715, 46.282505, 46.970884, 47.68845, 48.409852, 49.144643, 49.902491, 50.659014, 51.452725, 52.283618, 53.124894, 53.97159, 54.874522, 55.801324, 56.770306, 57.763231, 58.80663, 59.889991, 61.034863, 62.21576, 63.451532, 64.766405, 66.133401, 67.58048, 69.161084, 70.865986, 72.706889, 74.712174, 76.949105, 79.592078, 82.782598, 86.640221, 91.827476, 100]
-var scaling_factor = 2.888948 # Factor that we ended up scaling the above array by to get mountains to 100
+# Generated once at the beginning of runtime, which is better for development because I change stuff so much. We make terrain decisions based on percentiles, not percentage of max height, because Simplex noise is normally distributed and would be astronomically unlikely to go anywhere near our max height, especially with a lot of octaves.
+# TODO: When ready for an actual release, hardcode an iteration of this that has a ton of iterations in, rather than generating at load time every time.
+var percentiles
 
 func _ready():
 
+	# TODO: Introduce a seeding system into the game, so players can get the same worlds.
 	randomize()
-	noise = OpenSimplexNoise.new()
-	noise.seed = randi()
-	noise.octaves = 6
-	noise.period = 220
+
+	# Normal height map
+	height_map_noise = OpenSimplexNoise.new()
+	height_map_noise.seed = randi()
+	height_map_noise.octaves = 4
+	height_map_noise.period = 220
+
+	# Completely separate "moisture map" used in conjunction with height map to decide which biome somewhere is
+	moisture_map_noise = OpenSimplexNoise.new()
+	moisture_map_noise.seed = randi()
+	moisture_map_noise.octaves = 4
+	moisture_map_noise.period = 220
+
+	# Update our percentiles list on load time
+	generate_percentiles()
 
 func add_chunk(chunk_key):
 
@@ -49,29 +51,23 @@ func add_chunk(chunk_key):
 		return
 
 	chunks_loading_this_frame += 1
-	load_chunk([chunk_key.x, chunk_key.y])
 	unready_chunks[chunk_key] = 1
+	load_chunk(chunk_key)
 
-func load_chunk(arr):
+# Initialize chunk and add it to the tree when we get idle time
+func load_chunk(chunk_key):
+	var chunk = Chunk.new(height_map_noise, chunk_key.x * chunk_size, chunk_key.y * chunk_size, chunk_size, MAX_HEIGHT)
+	chunk.translation = Vector3(chunk_key.x * chunk_size, 0, chunk_key.y * chunk_size)
+	call_deferred("load_done", chunk)
 
-	# When you give a thread a function to run, is passed in as array
-	var x = arr[0]
-	var z = arr[1]
-
-	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
-	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size, MAX_HEIGHT)
-	chunk.translation = Vector3(x * chunk_size, 0, z * chunk_size)
-
-	# Wait until the main thread isn't busy to go ahead and add this one to the tree
-	call_deferred("load_done", chunk, thread)
-
-# Adds the chunk to the tree whenever the main thread isn't busy
+# Add chunk to tree and move chunk from unready chunks to ready chunks
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 
+# Retrieve chunk at specified coordinate
 func get_chunk(chunk_key):
 	if chunks.has(chunk_key):
 		return chunks.get(chunk_key)
@@ -90,20 +86,16 @@ func _process(_delta):
 
 	# Update player positioning values
 	var changed_chunks_this_frame = false
-	var new_p_x = floor($Player.translation.x / chunk_size)
-	var new_p_z = floor($Player.translation.z / chunk_size)
-	if new_p_x != p_x or new_p_z != p_z:
+	var new_player_pos = Vector2(floor($Player.translation.x / chunk_size), floor($Player.translation.z / chunk_size))
+	if new_player_pos != player_pos:
 		changed_chunks_this_frame = true
-	p_x = new_p_x
-	p_z = new_p_z
-	player_pos = Vector2(p_x, p_z)
+	player_pos = new_player_pos
 
 	# Terrain generation will go full steam until it hits another
 	chunks_loading_this_frame = 0
 
-	# Will be a more thought-out system in the future (and probably be on a different thread), but this is a basic
-	# implementation of loading a little quicker when you want to render more chunks overall
-	var chunks_per_frame = floor(chunk_load_radius * (3.0 / 7))
+	# This value needs to scale with the chunks in a circle. A circle adds more chunks every ring, so a linear term isn't enough to stay caught up. However, if we let it go pure exponential without any sort of cap, this quickly gets REALLY laggy.
+	var chunks_per_frame = min(pow(chunk_load_radius, 1.1), 20)
 	load_closest_n_chunks(chunks_per_frame)
 
 	# Call this whenever we change chunks, and no more frequently. This is the mathematical maximum number of times we can call it without having any redundant calls, which is what we're going for.
@@ -118,36 +110,36 @@ func load_closest_n_chunks(num_chunks_to_load):
 	while current_radius < chunk_load_radius:
 
 		# Top-right spot; If we include this as part of the last loop there's a weird edge case at (0, 0) so this is separate
-		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
-			add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
+		if Vector2(player_pos.x + current_radius, player_pos.y + current_radius).distance_to(player_pos) <= chunk_load_radius:
+			add_chunk(Vector2(player_pos.x + current_radius, player_pos.y + current_radius))
 			if chunks_loading_this_frame >= num_chunks_to_load:
 				return
 
 		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
 		for i in range(1, 2 * current_radius + 1):
-			if Vector2(p_x + current_radius, p_z + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(p_x + current_radius, p_z + current_radius - i))
+			if Vector2(player_pos.x + current_radius, player_pos.y + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(player_pos.x + current_radius, player_pos.y + current_radius - i))
 				if chunks_loading_this_frame >= num_chunks_to_load:
 					return
 
 		# Left across the bottom edge
 		for i in range(1, 2 * current_radius + 1):
-			if Vector2(p_x + current_radius - i, p_z - current_radius).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(p_x + current_radius - i, p_z - current_radius))
+			if Vector2(player_pos.x + current_radius - i, player_pos.y - current_radius).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(player_pos.x + current_radius - i, player_pos.y - current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:
 					return
 
 		# Up the left edge
 		for i in range(1, 2 * current_radius + 1):
-			if Vector2(p_x - current_radius, p_z - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(p_x - current_radius, p_z - current_radius + i))
+			if Vector2(player_pos.x - current_radius, player_pos.y - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(player_pos.x - current_radius, player_pos.y - current_radius + i))
 				if chunks_loading_this_frame >= num_chunks_to_load:
 					return
 
 		# Right across the top edge (excluding top-right)
 		for i in range(1, 2 * current_radius):
-			if Vector2(p_x - current_radius + i, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(p_x - current_radius + i, p_z + current_radius))
+			if Vector2(player_pos.x - current_radius + i, player_pos.y + current_radius).distance_to(player_pos) <= chunk_load_radius:
+				add_chunk(Vector2(player_pos.x - current_radius + i, player_pos.y + current_radius))
 				if chunks_loading_this_frame >= num_chunks_to_load:
 					return
 
@@ -157,19 +149,19 @@ func load_closest_n_chunks(num_chunks_to_load):
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
 	for chunk in chunks.values():
-		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) > chunk_load_radius:
+		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(player_pos.x, player_pos.y)) > chunk_load_radius:
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk.key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
-# warning-ignore:shadowed_variable
 func noise_to_height(noise):
 	noise = noise_to_height_no_scaling(noise) # Let other function do all the work up to scaling for SpoC reasons
 	noise *= scaling_factor # Scale so that mountains are near 100 height
-	return noise
+	if noise > MAX_HEIGHT:
+		print("Generated something above max height; Fix the noise function!")
+	return floor(noise)
 
 # Used to generate the percentiles (b/c normal generation scales BY the percentiles)
-# warning-ignore:shadowed_variable
 func noise_to_height_no_scaling(noise):
 	noise = (noise + 1) / 2 # Transform [-1, 1] to [0, 1]
 	noise = pow(noise, 3) # Accentuates mountains and makes flat areas more common
@@ -179,30 +171,33 @@ func noise_to_height_no_scaling(noise):
 # Perlin noise is essentially a random distribution. So, it's best to use *percentiles*, not actual heights relative to the max. I regenerate these and hardcode them in whenever I change my height map at all, and just put the hardcoded numbers into shader and chunk classes.
 func generate_percentiles():
 
-	var horiz_lower = -10000000
-	var horiz_upper = 10000000
-	var horiz_step = 100000
+	# These numbers take like half a second at load time, it's cool
+	var horiz_lower = -10000000000
+	var horiz_upper = 10000000000
+	var horiz_step = 100000000
 	var y_lower = 0
-	var y_upper = 100
-	var y_step = 5
+	var y_upper = 101
+	var y_step = 20
 
+	# warning-ignore:shadowed_variable
 	var height_map = []
 	for x in range(horiz_lower, horiz_upper, horiz_step):
 		for y in range(y_lower, y_upper, y_step):
 			for z in range(horiz_lower, horiz_upper, horiz_step):
-				height_map.append(noise_to_height_no_scaling(noise.get_noise_3d(x, y, z)))
+				height_map.append(noise_to_height_no_scaling(height_map_noise.get_noise_3d(x, y, z)))
 	height_map.sort()
 
 	percentiles = []
-	percentiles.append(0)
-	for percentile in range(0, 100, 1):
+	percentiles.append(0.0) # 0th percentile is minimum possible value
+	for percentile in range(1, 100): # Figure out 1st through 99th percentile
 		percentiles.append(height_map[floor(height_map.size() * percentile * .01)])
+	percentiles.append(height_map[height_map.size() - 1]) # 100th percentile handled uniquely to be last element. If included in the loop above, requires an edge case check every time, otherwise will go one over the last element.
 
 	# Go through and scale them by the largest value
-	scaling_factor = MAX_HEIGHT / percentiles.max()
+	scaling_factor = MAX_HEIGHT / percentiles[100] # Calculate from the second highest value, NOT the highest, which is always 100
 	for i in range(0, percentiles.size()):
 		percentiles[i] *= scaling_factor
 
-	print("Percentiles: " + str(percentiles))
-	print("Scaling Factor: " + str(scaling_factor))
+	print("scaling_factor: " + str(scaling_factor))
+	print("percentiles: " + str(percentiles))
 
