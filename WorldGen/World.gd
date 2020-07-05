@@ -3,7 +3,7 @@ extends Spatial
 const chunk_size = 16
 
 # Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 16
+const chunk_load_radius = 32
 
 var noise
 var counter = 0
@@ -42,9 +42,6 @@ func _ready():
 	noise.octaves = 6
 	noise.period = 220
 
-	# Instantiate threads we use for terrain generation
-	thread = Thread.new()
-
 func add_chunk(chunk_key):
 
 	# If this chunk has already been generated or is currently being generated, don't generate
@@ -52,15 +49,14 @@ func add_chunk(chunk_key):
 		return
 
 	chunks_loading_this_frame += 1
-	load_chunk([thread, chunk_key.x, chunk_key.y])
+	load_chunk([chunk_key.x, chunk_key.y])
 	unready_chunks[chunk_key] = 1
 
 func load_chunk(arr):
 
 	# When you give a thread a function to run, is passed in as array
-	var thread = arr[0]
-	var x = arr[1]
-	var z = arr[2]
+	var x = arr[0]
+	var z = arr[1]
 
 	# x,z are used as key but to interface with the map we need an actual position, so we multiply by chunk size
 	var chunk = Chunk.new(noise, x * chunk_size, z * chunk_size, chunk_size, MAX_HEIGHT)
@@ -70,7 +66,7 @@ func load_chunk(arr):
 	call_deferred("load_done", chunk, thread)
 
 # Adds the chunk to the tree whenever the main thread isn't busy
-func load_done(chunk, thread):
+func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
@@ -94,8 +90,8 @@ func _process(_delta):
 
 	# Update player positioning values
 	var changed_chunks_this_frame = false
-	var new_p_x = int($Player.translation.x) / chunk_size
-	var new_p_z = int($Player.translation.z) / chunk_size
+	var new_p_x = floor($Player.translation.x / chunk_size)
+	var new_p_z = floor($Player.translation.z / chunk_size)
 	if new_p_x != p_x or new_p_z != p_z:
 		changed_chunks_this_frame = true
 	p_x = new_p_x
@@ -112,7 +108,7 @@ func _process(_delta):
 
 	# Call this whenever we change chunks, and no more frequently. This is the mathematical maximum number of times we can call it without having any redundant calls, which is what we're going for.
 	if changed_chunks_this_frame:
-		remove_far_chunks(chunks_per_frame)
+		remove_far_chunks()
 
 func load_closest_n_chunks(num_chunks_to_load):
 
@@ -159,19 +155,21 @@ func load_closest_n_chunks(num_chunks_to_load):
 		current_radius += 1
 
 # Removes any chunks deemed too far away from the scene
-func remove_far_chunks(max_chunks_removed):
+func remove_far_chunks():
 	for chunk in chunks.values():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) > chunk_load_radius:
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk.key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
+# warning-ignore:shadowed_variable
 func noise_to_height(noise):
 	noise = noise_to_height_no_scaling(noise) # Let other function do all the work up to scaling for SpoC reasons
 	noise *= scaling_factor # Scale so that mountains are near 100 height
 	return noise
 
 # Used to generate the percentiles (b/c normal generation scales BY the percentiles)
+# warning-ignore:shadowed_variable
 func noise_to_height_no_scaling(noise):
 	noise = (noise + 1) / 2 # Transform [-1, 1] to [0, 1]
 	noise = pow(noise, 3) # Accentuates mountains and makes flat areas more common
@@ -200,10 +198,8 @@ func generate_percentiles():
 	for percentile in range(0, 100, 1):
 		percentiles.append(height_map[floor(height_map.size() * percentile * .01)])
 
-	# print("Pre-scaling: " + str(percentiles))
-
 	# Go through and scale them by the largest value
-	var scaling_factor = MAX_HEIGHT / percentiles.max()
+	scaling_factor = MAX_HEIGHT / percentiles.max()
 	for i in range(0, percentiles.size()):
 		percentiles[i] *= scaling_factor
 

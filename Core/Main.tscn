@@ -16,8 +16,12 @@ points = PoolVector3Array( 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1 )
 [sub_resource type="Environment" id=5]
 background_mode = 2
 background_sky = SubResource( 4 )
-ssao_bias = 1.0
+fog_sun_amount = 0.1
+fog_depth_begin = 0.0
+fog_depth_end = 421.4
+fog_depth_curve = 0.517633
 dof_blur_near_enabled = true
+adjustment_enabled = true
 
 [node name="Main" type="Spatial"]
 script = ExtResource( 1 )

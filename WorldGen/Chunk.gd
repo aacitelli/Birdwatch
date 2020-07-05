@@ -52,8 +52,8 @@ func generate_chunk():
 	# TODO: Docs aren't very helpful as to what some of these characteristics mean, figure them out
 	var plane_mesh = PlaneMesh.new()
 	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.subdivide_depth = chunk_size * (1 / 64.0)
-	plane_mesh.subdivide_width = chunk_size * (1 / 64.0)
+	plane_mesh.subdivide_depth = chunk_size * (1 / 16.0)
+	plane_mesh.subdivide_width = chunk_size * (1 / 16.0)
 
 	# Well, Godot doesn't support passing arrays into shaders, so this is the hacky approach...
 	# See issue here https://github.com/godotengine/godot/issues/10751
