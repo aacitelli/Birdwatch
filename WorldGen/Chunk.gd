@@ -10,6 +10,7 @@ var z
 var z_grid
 var chunk_size
 var max_height
+var key
 
 var noise
 var should_remove
@@ -30,6 +31,7 @@ func _init(noise, x, z, chunk_size, max_height):
 	self.z_grid = z / chunk_size
 	self.chunk_size = chunk_size
 	self.max_height = max_height
+	self.key = Vector2(self.x_grid, self.z_grid)
 
 func _ready():
 

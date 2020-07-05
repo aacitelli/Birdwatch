@@ -3,7 +3,7 @@ extends Spatial
 const chunk_size = 16
 
 # Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 16
+const chunk_load_radius = 32
 
 var noise
 var counter = 0
@@ -54,11 +54,6 @@ func add_chunk(chunk_key):
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
 		return
 
-	# Only need to reset everything once per process call, not every time we run a thread
-	#if not thread.is_active():
-		#print("Yah.")
-		#var error = thread.start(self, "load_chunk", [thread, chunk_key.x, chunk_key.y])
-	print("Chunk " + str(chunk_key) + " doesn't exist yet. Calling load_chunk().")
 	chunks_loading_this_frame += 1
 	load_chunk([thread, chunk_key.x, chunk_key.y])
 	unready_chunks[chunk_key] = 1
@@ -181,29 +176,22 @@ func remove_far_chunks(max_chunks_removed):
 	for chunk in chunks.values():
 		chunk.should_remove = true
 
-	print("Flagged " + str(chunks.size()) + " chunks as needing removal.")
-
 	# Iterate through every chunk in our list, setting the flag if it's within range
 	# More efficient than iterating row by row through n^2 elements, especially if most won't be loaded
-	var num_valid_chunks = 0
 	for chunk in chunks.values():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
-			num_valid_chunks += 1
 			chunk.should_remove = false
 
-	print("Flagged " + str(num_valid_chunks) + " as good.")
-
-	# TODO: Figure out why this doesn't work with just one loop???????????? Like wtf?
 	# Remove anything that doesn't have that flag set
-	var num_chunks_removed_this_frame = 0
-	for i in range(max_chunks_removed):
-		for key in chunks:
-			var chunk = chunks[key]
-			if chunk.should_remove:
-				num_chunks_removed_this_frame += 1
-				chunk.call_deferred("free") # .queue_free()
-				chunks.erase(key)
-	print("num_chunks_removed_this_frame: " + str(num_chunks_removed_this_frame))
+	#for i in range(max_chunks_removed):
+
+	# TODO: Figure out why I need to run this loop more than once? I have no clue why, without wrapping this in another loop, this only ever removes one thing per process call.
+	var iterations = 0
+	for chunk in chunks.values():
+		if chunk.should_remove:
+			chunk.call_deferred("free") # .queue_free()
+			chunks.erase(chunk.key)
+	print("Iterations: " + str(iterations))
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
