@@ -88,9 +88,9 @@ func get_chunk(chunk_key):
 var num_process_calls = 0
 func _process(_delta):
 
-	num_process_calls += 1
-	print("\n-----------------------\n")
-	print("Process call #" + str(num_process_calls))
+	# num_process_calls += 1
+	# print("\n-----------------------\n")
+	# print("Process call #" + str(num_process_calls))
 
 	# Don't want to overflow the terminal, keep this to being output every second or two
 	fps_count += Engine.get_frames_per_second()
@@ -182,16 +182,11 @@ func remove_far_chunks(max_chunks_removed):
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
 			chunk.should_remove = false
 
-	# Remove anything that doesn't have that flag set
-	#for i in range(max_chunks_removed):
-
-	# TODO: Figure out why I need to run this loop more than once? I have no clue why, without wrapping this in another loop, this only ever removes one thing per process call.
-	var iterations = 0
+	# Get rid of everything that's outside chunk removal range. We need to do this because chunks take memory and it won't take us long to hit memory cap.
 	for chunk in chunks.values():
 		if chunk.should_remove:
-			chunk.call_deferred("free") # .queue_free()
+			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk.key)
-	print("Iterations: " + str(iterations))
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
