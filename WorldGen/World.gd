@@ -121,12 +121,12 @@ func _process(_delta):
 
 	# Will be a more thought-out system in the future (and probably be on a different thread), but this is a basic
 	# implementation of loading a little quicker when you want to render more chunks overall
-	# This is calculated here instead of just one global value b/c I might eventually make this number adjust to be a little higher if the user is above their fps goal
-	var chunks_per_frame = floor(chunk_load_radius * (5.0/7))
+	var chunks_per_frame = floor(chunk_load_radius * (5.0 / 7))
 	load_closest_n_chunks(chunks_per_frame)
 
 	# Remove everything further than our "draw distance"
-	remove_far_chunks()
+	# The most we ever have to remove per frame is the max we can ever generate per frame, so we use the same number
+	remove_far_chunks(chunks_per_frame)
 
 # var time_before = OS.get_ticks_msec()c
 # var total_time = OS.get_ticks_msec() - time_before
@@ -137,7 +137,7 @@ func load_closest_n_chunks(num_chunks_to_load):
 	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
 	var current_radius = 0
 	while current_radius < chunk_load_radius:
-		
+
 		# Top-right spot; If we include this as part of the last loop there's a weird edge case at (0, 0) so this is separate
 		if Vector2(p_x + current_radius, p_z + current_radius).distance_to(player_pos) <= chunk_load_radius:
 				add_chunk(Vector2(p_x + current_radius, p_z + current_radius))
@@ -175,12 +175,12 @@ func load_closest_n_chunks(num_chunks_to_load):
 		# Move on to the next ring of the "spiral"
 		current_radius += 1
 
-func remove_far_chunks():
+func remove_far_chunks(max_chunks_removed):
 
 	# Set them all as needing removal
 	for chunk in chunks.values():
 		chunk.should_remove = true
-		
+
 	print("Flagged " + str(chunks.size()) + " chunks as needing removal.")
 
 	# Iterate through every chunk in our list, setting the flag if it's within range
@@ -190,21 +190,20 @@ func remove_far_chunks():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
 			num_valid_chunks += 1
 			chunk.should_remove = false
-			
+
 	print("Flagged " + str(num_valid_chunks) + " as good.")
 
+	# TODO: Figure out why this doesn't work with just one loop???????????? Like wtf?
 	# Remove anything that doesn't have that flag set
 	var num_chunks_removed_this_frame = 0
-	print(chunks.size())
-	for key in chunks:
-		var chunk = chunks[key]
-		print("chunk: " + str(chunk))
-		if chunk.should_remove:
-			num_chunks_removed_this_frame += 1
-			print("num_chunks_removed_this_frame: " + str(num_chunks_removed_this_frame))
-			print("Removing chunk at (" + str(chunk.x_grid) + "," + str(chunk.z_grid) + ")")
-			chunk.queue_free()
-			chunks.erase(key)
+	for i in range(max_chunks_removed):
+		for key in chunks:
+			var chunk = chunks[key]
+			if chunk.should_remove:
+				num_chunks_removed_this_frame += 1
+				chunk.call_deferred("free") # .queue_free()
+				chunks.erase(key)
+	print("num_chunks_removed_this_frame: " + str(num_chunks_removed_this_frame))
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
