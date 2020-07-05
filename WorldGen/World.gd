@@ -3,7 +3,7 @@ extends Spatial
 const chunk_size = 16
 
 # Having this too high then actually loading that many makes the game HELLA LAGGY
-const chunk_load_radius = 32
+const chunk_load_radius = 16
 
 var noise
 var counter = 0
@@ -11,15 +11,14 @@ var counter = 0
 var fps_count = 0
 var fps_measurements = 0
 
-# Self-explanatory
 var chunks = {}
-
-# Used as a lock system to make sure several threads aren't working on the same chunk at once
 var unready_chunks = {}
 
 # We use threading so it doesn't lock up the main thread and actually lag
 # Increasing number of threads speeds it up (more chunks being generated each _process call), but means each _process call takes a little longer (i.e. less framerate). 4 seems to be a good middle ground of reasonably fast loading while leaving reasonably good performance.
 var thread
+
+# TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
 # Holds grid position of player; Updated every frame
 var p_x
@@ -28,8 +27,6 @@ var player_pos
 var MAX_HEIGHT = 100
 
 var chunks_loading_this_frame
-
-signal loaded_chunk
 
 # Percentiles are used for stuff like biome selection and shading b/c perlin noise is (close to) a normal distribution
 # This scales by (MAX_HEIGHT) / 100th percentiles so stuff like mountains are at the highest peak
@@ -95,9 +92,14 @@ func _process(_delta):
 	# print("\n-----------------------\n")
 	# print("Process call #" + str(num_process_calls))
 
-	# Need updated player positioning values
-	p_x = int($Player.translation.x) / chunk_size
-	p_z = int($Player.translation.z) / chunk_size
+	# Update player positioning values
+	var changed_chunks_this_frame = false
+	var new_p_x = int($Player.translation.x) / chunk_size
+	var new_p_z = int($Player.translation.z) / chunk_size
+	if new_p_x != p_x or new_p_z != p_z:
+		changed_chunks_this_frame = true
+	p_x = new_p_x
+	p_z = new_p_z
 	player_pos = Vector2(p_x, p_z)
 
 	# Terrain generation will go full steam until it hits another
@@ -108,11 +110,9 @@ func _process(_delta):
 	var chunks_per_frame = floor(chunk_load_radius * (3.0 / 7))
 	load_closest_n_chunks(chunks_per_frame)
 
-	# Call this five times a second. We want to run this as little as possible (to avoid too many searches through ALL our chunks), but we can't make this interval too much, or else there'll be mini lag spikes when this function does run.
-	remove_far_chunks(chunks_per_frame)
-
-	# total_time = OS.get_ticks_usec() - time_before
-	# print("remove_far_chunks time taken (us): " + str(total_time))
+	# Call this whenever we change chunks, and no more frequently. This is the mathematical maximum number of times we can call it without having any redundant calls, which is what we're going for.
+	if changed_chunks_this_frame:
+		remove_far_chunks(chunks_per_frame)
 
 func load_closest_n_chunks(num_chunks_to_load):
 
@@ -158,13 +158,10 @@ func load_closest_n_chunks(num_chunks_to_load):
 		# Move on to the next ring of the "spiral"
 		current_radius += 1
 
-# TODO: Modify chunks data structure to be something I sort highest to lowest distance every frame (adding new chunks to the end), then in this function I can just remove from the beginning until I hit something within range.
-# TODO: Benchmark the above approach. The above approach is *technically* worse theta complexity because of the sort, but because I only really have to do it when the user changes chunks and that makes this function drastically quicker (still technically same theta complexity) it's probably a performance improvement. This is where a large chunk of my performance is used anyway.
+# Removes any chunks deemed too far away from the scene
 func remove_far_chunks(max_chunks_removed):
-
-	# Set them all as needing removal
 	for chunk in chunks.values():
-		if not Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) <= chunk_load_radius:
+		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(p_x, p_z)) > chunk_load_radius:
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk.key)
 

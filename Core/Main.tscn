@@ -41,4 +41,3 @@ environment = SubResource( 5 )
 
 [node name="DirectionalLight" type="DirectionalLight" parent="."]
 transform = Transform( 0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 50, 0 )
-[connection signal="loaded_chunk" from="WorldEnvironment/World" to="WorldEnvironment/World" method="_on_World_loaded_chunk"]
