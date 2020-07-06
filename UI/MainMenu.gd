@@ -65,3 +65,7 @@ func _on_ControlsSectionButton_pressed():
 	get_node(options_menu_bp + "Graphics").hide()
 	get_node(options_menu_bp + "Gameplay").hide()
 	get_node(options_menu_bp + "Controls").show()
+
+func _on_BackToMenuButton_pressed():
+	get_node(main_menu_bp).show()
+	get_node("MainMenuBackground/OptionsMenuContainer").hide()

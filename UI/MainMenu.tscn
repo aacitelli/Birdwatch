@@ -87,9 +87,15 @@ margin_top = 75.0
 margin_right = 949.0
 margin_bottom = 525.0
 
-[node name="SectionSelector" type="HBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+[node name="BackToMenuButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
 margin_right = 874.0
 margin_bottom = 20.0
+text = "Back To Menu"
+
+[node name="SectionSelector" type="HBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 24.0
+margin_right = 874.0
+margin_bottom = 44.0
 size_flags_vertical = 0
 
 [node name="GameplaySectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
@@ -127,9 +133,9 @@ size_flags_horizontal = 3
 text = "Controls"
 
 [node name="Gameplay" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
-margin_top = 24.0
+margin_top = 48.0
 margin_right = 874.0
-margin_bottom = 62.0
+margin_bottom = 86.0
 
 [node name="GameplayLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Gameplay"]
 margin_right = 874.0
@@ -140,9 +146,9 @@ align = 1
 valign = 1
 
 [node name="Audio" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
-margin_top = 66.0
+margin_top = 90.0
 margin_right = 874.0
-margin_bottom = 104.0
+margin_bottom = 128.0
 
 [node name="AudioLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Audio"]
 margin_right = 874.0
@@ -153,9 +159,9 @@ align = 1
 valign = 1
 
 [node name="Video" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
-margin_top = 108.0
+margin_top = 132.0
 margin_right = 874.0
-margin_bottom = 146.0
+margin_bottom = 170.0
 
 [node name="VideoLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Video"]
 margin_right = 874.0
@@ -166,9 +172,9 @@ align = 1
 valign = 1
 
 [node name="Graphics" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
-margin_top = 150.0
+margin_top = 174.0
 margin_right = 874.0
-margin_bottom = 188.0
+margin_bottom = 212.0
 
 [node name="GraphicsLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Graphics"]
 margin_right = 874.0
@@ -193,6 +199,7 @@ align = 1
 valign = 1
 [connection signal="pressed" from="MainMenuBackground/MainMenu/OptionsList/PlayGameButton" to="." method="_on_PlayGameButton_pressed"]
 [connection signal="pressed" from="MainMenuBackground/MainMenu/OptionsList/OptionsButton" to="." method="_on_OptionsButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/BackToMenuButton" to="." method="_on_BackToMenuButton_pressed"]
 [connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/GameplaySectionButton" to="." method="_on_GameplaySectionButton_pressed"]
 [connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/AudioSectionButton" to="." method="_on_AudioSectionButton_pressed"]
 [connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/VideoSectionButton" to="." method="_on_VideoSectionButton_pressed"]
