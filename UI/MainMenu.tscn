@@ -1,0 +1,207 @@
+[gd_scene load_steps=5 format=2]
+
+[ext_resource path="res://UI/Fonts/Quicksand-Regular.tres" type="DynamicFont" id=1]
+[ext_resource path="res://UI/MainMenu.gd" type="Script" id=2]
+
+[sub_resource type="StyleBoxEmpty" id=1]
+
+[sub_resource type="StyleBoxEmpty" id=2]
+
+[node name="Control" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource( 2 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="MainMenuBackground" type="Panel" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="MainMenu" type="MarginContainer" parent="MainMenuBackground"]
+anchor_top = -0.0029302
+anchor_right = 1.0
+anchor_bottom = 0.99707
+custom_constants/margin_right = 75
+custom_constants/margin_top = 75
+custom_constants/margin_left = 75
+custom_constants/margin_bottom = 75
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="OptionsList" type="VBoxContainer" parent="MainMenuBackground/MainMenu"]
+margin_left = 75.0
+margin_top = 75.0
+margin_right = 949.0
+margin_bottom = 525.0
+custom_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="MainMenuBackground/MainMenu/OptionsList"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Birdwatch"
+align = 1
+valign = 1
+
+[node name="PlayGameButton" type="Button" parent="MainMenuBackground/MainMenu/OptionsList"]
+margin_top = 58.0
+margin_right = 874.0
+margin_bottom = 96.0
+custom_styles/normal = SubResource( 1 )
+custom_fonts/font = ExtResource( 1 )
+text = "Play Game"
+align = 0
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="OptionsButton" type="Button" parent="MainMenuBackground/MainMenu/OptionsList"]
+margin_top = 116.0
+margin_right = 874.0
+margin_bottom = 154.0
+custom_styles/normal = SubResource( 2 )
+custom_fonts/font = ExtResource( 1 )
+text = "Options"
+align = 0
+
+[node name="OptionsMenuContainer" type="MarginContainer" parent="MainMenuBackground"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+custom_constants/margin_right = 75
+custom_constants/margin_top = 75
+custom_constants/margin_left = 75
+custom_constants/margin_bottom = 75
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="OptionsMenu" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer"]
+margin_left = 75.0
+margin_top = 75.0
+margin_right = 949.0
+margin_bottom = 525.0
+
+[node name="BackToMenuButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_right = 874.0
+margin_bottom = 20.0
+text = "Back To Menu"
+
+[node name="SectionSelector" type="HBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 24.0
+margin_right = 874.0
+margin_bottom = 44.0
+size_flags_vertical = 0
+
+[node name="GameplaySectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
+margin_right = 171.0
+margin_bottom = 20.0
+size_flags_horizontal = 3
+text = "Gameplay"
+
+[node name="AudioSectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
+margin_left = 175.0
+margin_right = 346.0
+margin_bottom = 20.0
+size_flags_horizontal = 3
+text = "Audio"
+
+[node name="VideoSectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
+margin_left = 350.0
+margin_right = 521.0
+margin_bottom = 20.0
+size_flags_horizontal = 3
+text = "Video"
+
+[node name="GraphicsSectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
+margin_left = 525.0
+margin_right = 696.0
+margin_bottom = 20.0
+size_flags_horizontal = 3
+text = "Graphics"
+
+[node name="ControlsSectionButton" type="Button" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector"]
+margin_left = 700.0
+margin_right = 874.0
+margin_bottom = 20.0
+size_flags_horizontal = 3
+text = "Controls"
+
+[node name="Gameplay" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 48.0
+margin_right = 874.0
+margin_bottom = 86.0
+
+[node name="GameplayLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Gameplay"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Gameplay Settings"
+align = 1
+valign = 1
+
+[node name="Audio" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 90.0
+margin_right = 874.0
+margin_bottom = 128.0
+
+[node name="AudioLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Audio"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Audio Settings"
+align = 1
+valign = 1
+
+[node name="Video" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 132.0
+margin_right = 874.0
+margin_bottom = 170.0
+
+[node name="VideoLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Video"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Video Settings"
+align = 1
+valign = 1
+
+[node name="Graphics" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+margin_top = 174.0
+margin_right = 874.0
+margin_bottom = 212.0
+
+[node name="GraphicsLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Graphics"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Graphics Settings"
+align = 1
+valign = 1
+
+[node name="Controls" type="VBoxContainer" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu"]
+visible = false
+margin_top = 192.0
+margin_right = 874.0
+margin_bottom = 230.0
+
+[node name="ControlsLabel" type="Label" parent="MainMenuBackground/OptionsMenuContainer/OptionsMenu/Controls"]
+margin_right = 874.0
+margin_bottom = 38.0
+custom_fonts/font = ExtResource( 1 )
+text = "Controls Settings"
+align = 1
+valign = 1
+[connection signal="pressed" from="MainMenuBackground/MainMenu/OptionsList/PlayGameButton" to="." method="_on_PlayGameButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/MainMenu/OptionsList/OptionsButton" to="." method="_on_OptionsButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/BackToMenuButton" to="." method="_on_BackToMenuButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/GameplaySectionButton" to="." method="_on_GameplaySectionButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/AudioSectionButton" to="." method="_on_AudioSectionButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/VideoSectionButton" to="." method="_on_VideoSectionButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/GraphicsSectionButton" to="." method="_on_GraphicsSectionButton_pressed"]
+[connection signal="pressed" from="MainMenuBackground/OptionsMenuContainer/OptionsMenu/SectionSelector/ControlsSectionButton" to="." method="_on_ControlsSectionButton_pressed"]
