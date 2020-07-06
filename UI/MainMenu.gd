@@ -6,6 +6,8 @@ var options_menu_bp
 func _ready():
 	main_menu_bp = "MainMenuBackground/MainMenu"
 	options_menu_bp = "MainMenuBackground/OptionsMenuContainer/OptionsMenu/"
+	get_node(main_menu_bp).show()
+	get_node("MainMenuBackground/OptionsMenuContainer").hide()
 
 func _process(_delta):
 	if Input.is_action_pressed("exit"):
