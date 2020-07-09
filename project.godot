@@ -21,7 +21,7 @@ _global_script_class_icons={
 [application]
 
 config/name="Birdwatch"
-run/main_scene="res://UI/MainMenu.tscn"
+run/main_scene="res://Core/Main.tscn"
 config/icon="res://icon.png"
 
 [debug]

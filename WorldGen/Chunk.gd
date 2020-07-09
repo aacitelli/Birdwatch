@@ -48,12 +48,25 @@ func _ready():
 
 func generate_chunk():
 
-	# Create the mesh along with its fundamental characteristics
-	# TODO: Docs aren't very helpful as to what some of these characteristics mean, figure them out
+	var ocean = []
+	var beach = []
+	var lowlands = []
+	var highlands = []
+	var mountains = []
+
+	# TODO: Implement biome blending. This will be a lot of easy-to-mix-up math, but I can figure out exact colors for every blended triangle beforehand.
+
+	# Iterate through each vertex, constructing a 2D array that holds the height and moisture data for each of the vertices in the plot
+
+	# Iterate through each "square", constructing a 2D array that holds the biome that square is in
+
+	# Iterate through each biome, making one big PlaneMesh for the entire biome and assigning that biome's material all in one go
+
+	# Specify the size and amount of vertices in each chunk. subdivide_width of chunk_size * (1/16) means a 16x16 grid in each chunk.
 	var plane_mesh = PlaneMesh.new()
 	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.subdivide_depth = chunk_size * (1 / 16.0)
-	plane_mesh.subdivide_width = chunk_size * (1 / 16.0)
+	plane_mesh.subdivide_depth = chunk_size * (1/16.0)
+	plane_mesh.subdivide_width = chunk_size * (1/16.0)
 
 	# Well, Godot doesn't support passing arrays into shaders, so this is the hacky approach...
 	# See issue here https://github.com/godotengine/godot/issues/10751
@@ -84,7 +97,7 @@ func generate_chunk():
 	data_tool.commit_to_surface(array_plane)
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	surface_tool.create_from(array_plane, 0)
-	surface_tool.generate_normals() # Presumably used for collision stuff; Generates what's 90deg from our plane.
+	surface_tool.generate_normals() # Used under the hood for collision stuff, presumably
 
 	# MeshInstance is the component actually rendered in the world
 	var mesh_instance = MeshInstance.new()
