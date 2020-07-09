@@ -56,7 +56,7 @@ func add_chunk(chunk_key):
 
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
-	var chunk = Chunk.new(height_map_noise, chunk_key.x * chunk_size, chunk_key.y * chunk_size, chunk_size, MAX_HEIGHT)
+	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
 	chunk.translation = Vector3(chunk_key.x * chunk_size, 0, chunk_key.y * chunk_size)
 	call_deferred("load_done", chunk)
 
@@ -150,8 +150,8 @@ func load_closest_n_chunks(num_chunks_to_load):
 func remove_far_chunks():
 	for chunk in chunks.values():
 		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(player_pos.x, player_pos.y)) > chunk_load_radius:
+			chunks.erase(chunk.chunk_key)
 			chunk.call_deferred("free") # .queue_free() works here too
-			chunks.erase(chunk.key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
