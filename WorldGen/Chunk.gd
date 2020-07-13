@@ -15,8 +15,10 @@ var chunk_key
 var noise_height
 var noise_moisture
 var should_remove
-var percentiles
 var water_level
+
+var world_node
+var percentiles
 
 const num_vertices_per_chunk = 4
 
@@ -36,83 +38,139 @@ func _init(noise_height, noise_moisture, chunk_key, chunk_size, max_height):
 
 func _ready():
 
-	# Grab this value from the parent (ready function ensures parent is also ready)
-	self.water_level = get_node("/root/Main/WorldEnvironment/World").percentiles[25]
+	# We use this reference a lot, helps with readability
+	world_node = get_node("/root/Main/WorldEnvironment/World")
+
+	# Grab values we use frequently here from parent
+	self.percentiles = world_node.percentiles
+	self.water_level = percentiles[25]
 
 	# Actually start off generation stuff
 	generate_water()
 	generate_chunk()
-
-# var time_before = OS.get_ticks_usec()
-# var total_time = OS.get_ticks_usec() - time_before
-# print("generate_chunk(): plane_mesh time taken: " + str(total_time))
 
 func generate_chunk():
 
 	# TODO: Implement biome blending. This will be a lot of easy-to-mix-up math, but I can figure out exact colors for every blended triangle beforehand.
 
 	# Iterate through each vertex, constructing a 2D array that holds the height (in actual height) and moisture (in noise) for each of the vertices in the plot
-	var vertex_noise_values = []
+	# Nothing computationally expensive in this loop, noise is (relatively) super cheap to generate
+	var vertex_noise_values = {}
 	for local_x in range(0, num_vertices_per_chunk + 1): # One more vertex than face. End of range() is exclusive
 		for local_z in range(0, num_vertices_per_chunk + 1):
-			vertex_noise_values = [
-				get_node("/root/Main/WorldEnvironment/World").noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z)),
-				noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
-			]
-			print(vertex_noise_values)
+			var pos = Vector2(local_x, local_z)
+			vertex_noise_values[pos] = {}
+			vertex_noise_values[pos].height = world_node.noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z))
+			vertex_noise_values[pos].moisture = noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
 
 	# Iterate through each "square", appending the coordinates of that square to our records for each biome
+	# Nothing computationally expensive in this loop either, dictionary access is constant time
 	var ocean = []
 	var beach = []
 	var lowlands = []
 	var highlands = []
 	var mountains = []
+	for local_x in range(0, num_vertices_per_chunk):
+		for local_z in range(0, num_vertices_per_chunk):
+			var pos_2d = Vector2(local_x, local_z)
+			var pos_3d = Vector3(local_x, vertex_noise_values[pos_2d].height, local_z)
 
-	# Iterate through each biome, making one big PlaneMesh for the entire biome and assigning that biome's material all in one go
+			# Ocean (0 to 25th Percentile)
+			if vertex_noise_values[pos_2d].height >= 0 && vertex_noise_values[pos_2d].height <= self.water_level:
+				ocean.append(pos_3d)
+				continue
+
+			# Beach (25th to 30th Percentile)
+			if vertex_noise_values[pos_2d].height > self.water_level && vertex_noise_values[pos_2d].height <= percentiles[30]:
+				beach.append(pos_3d)
+				continue
+
+			# Lowlands (30th to 65th Percentile)
+			if vertex_noise_values[pos_2d].height > percentiles[30] && vertex_noise_values[pos_2d].height <= percentiles[65]:
+				lowlands.append(pos_3d)
+				continue
+
+			# Highlands (65th to 85th Percentile)
+			if vertex_noise_values[pos_2d].height > percentiles[65] && vertex_noise_values[pos_2d].height <= percentiles[85]:
+				highlands.append(pos_3d)
+				continue
+
+			# Mountains (85th Percentile Up)
+			else:
+				mountains.append(pos_3d)
+				continue
+
+	# Materials for each biome
+	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
+	var beach_material = preload("res:///WorldGen/Biomes/BeachMaterial.tres")
+	var lowlands_material = preload("res:///WorldGen/Biomes/LowlandsMaterial.tres")
+	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
+	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
+
+	# Take each list of vertices through the function that'll draw them with the specified material
+	render_set_of_vertices_with_material(ocean, ocean_material)
+	render_set_of_vertices_with_material(beach, beach_material)
+	render_set_of_vertices_with_material(lowlands, lowlands_material)
+	render_set_of_vertices_with_material(highlands, highlands_material)
+	render_set_of_vertices_with_material(mountains, mountains_material)
+
+# Does exactly what it says it does, shockingly
+func render_set_of_vertices_with_material(vertices, material):
 
 	# Specify the size and amount of vertices in each chunk. subdivide_width of 16 means a 16x16 grid in each chunk.
-	var plane_mesh = PlaneMesh.new()
-	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.subdivide_depth = chunk_size * (1.0 / num_vertices_per_chunk)
-	plane_mesh.subdivide_width = chunk_size * (1.0 / num_vertices_per_chunk)
+	#var plane_mesh = PlaneMesh.new()
+	#plane_mesh.size = Vector2(chunk_size, chunk_size)
+	#plane_mesh.subdivide_depth = num_vertices_per_chunk
+	#plane_mesh.subdivide_width = num_vertices_per_chunk
+	#plane_mesh.material = material
 
-	# Well, Godot doesn't support passing arrays into shaders, so this is the hacky approach...
-	# See issue here https://github.com/godotengine/godot/issues/10751
-	plane_mesh.material = preload("res://WorldGen/terrain.material")
+	# Feed through SurfaceTool
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(material)
+	for vertex in vertices:
+		st.add_vertex(vertex)
 
-	# Declaring Godot stuff we're going to use to draw the environment
-	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code
-	var data_tool = MeshDataTool.new() # Lets us grab vertices from stuff we already generated
-
-	# Links the overall mesh for the chunk to the surface tool
-	surface_tool.create_from(plane_mesh, 0)
-	var array_plane = surface_tool.commit()
-
-	# Lets us get information about the vertex we just
-	var _error = data_tool.create_from_surface(array_plane, 0)
-
-	# Iterate through every vertex that is in the plane
-	for i in range(data_tool.get_vertex_count()):
-		var vertex = data_tool.get_vertex(i)
-		vertex.y = get_node("/root/Main/WorldEnvironment/World").noise_to_height(noise_height.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
-		data_tool.set_vertex(i, vertex)
-
-	# Remove everything from the ArrayMesh
-	for s in range(array_plane.get_surface_count()):
-		array_plane.surface_remove(s)
-
-	# Start actually drawing based on the ArrayMesh we were given
-	data_tool.commit_to_surface(array_plane)
-	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	surface_tool.create_from(array_plane, 0)
-	surface_tool.generate_normals() # Used under the hood for collision stuff, presumably
-
-	# MeshInstance is the component actually rendered in the world
+	# Apply to a mesh
 	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = surface_tool.commit() # Set it to whatever's contained in the SurfaceTool
-	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
+	mesh_instance.mesh = st.commit()
+	mesh_instance.create_trimesh_collision()
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 	add_child(mesh_instance)
+
+#	# Declaring Godot stuff we're going to use to draw the environment
+#	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code
+#	var data_tool = MeshDataTool.new() # Lets us grab vertices from stuff we already generated
+#
+#	# Links the overall mesh for the chunk to the surface tool
+#	surface_tool.create_from(plane_mesh, 0)
+#	var array_plane = surface_tool.commit()
+#
+#	# Lets us get information about the vertex we just
+#	var _error = data_tool.create_from_surface(array_plane, 0)
+#
+#	# Iterate through every vertex that is in the plane
+#	for i in range(data_tool.get_vertex_count()):
+#		var vertex = data_tool.get_vertex(i)
+#		vertex.y = world_node.noise_to_height(noise_height.get_noise_3d(vertex.x + x, vertex.y, vertex.z + z))
+#		data_tool.set_vertex(i, vertex)
+#
+#	# Remove everything from the ArrayMesh
+#	for s in range(array_plane.get_surface_count()):
+#		array_plane.surface_remove(s)
+#
+#	# Start actually drawing based on the ArrayMesh we were given
+#	data_tool.commit_to_surface(array_plane)
+#	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+#	surface_tool.create_from(array_plane, 0)
+#	surface_tool.generate_normals() # Used under the hood for collision stuff, presumably
+#
+#	# MeshInstance is the component actually rendered in the world
+#	# var mesh_instance = MeshInstance.new()
+#	mesh_instance.mesh = surface_tool.commit() # Set it to whatever's contained in the SurfaceTool
+#	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
+#	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
+#	add_child(mesh_instance)
 
 func generate_water():
 	var plane_mesh = PlaneMesh.new()
