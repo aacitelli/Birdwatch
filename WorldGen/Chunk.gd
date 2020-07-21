@@ -62,6 +62,7 @@ func generate_chunk():
 			vertex_noise_values[pos] = {}
 			vertex_noise_values[pos].height = world_node.noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z))
 			vertex_noise_values[pos].moisture = noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
+			# print("vertex at coords " + str(pos) + " has height " + str(vertex_noise_values[pos].height) + " and moisture " + str(vertex_noise_values[pos].moisture) + ".")
 
 	# Iterate through each "square", appending the coordinates of that square to our records for each biome
 	# Nothing computationally expensive in this loop either, dictionary access is constant time
@@ -114,15 +115,48 @@ func generate_chunk():
 	render_set_of_vertices_with_material(highlands, highlands_material)
 	render_set_of_vertices_with_material(mountains, mountains_material)
 
+# Returns [width, depth]
+func calc_chunk_subdivide_params(vertices):
+	var returnArr
+
+	var min_vertex = vertices[0]
+	var max_vertex = vertices[0]
+	for vertex in vertices:
+		if vertex.x < min_vertex.x:
+			min_vertex = vertex
+	return min_vertex
+
+func max_x(vertices):
+	var max_vertex = vertices[0]
+	for vertex in vertices:
+		if vertex.x > max_vertex.x:
+			max_vertex = vertex
+	return max_vertex
+
+func min_z(vertices):
+	var min_vertex = vertices[0]
+	for vertex in vertices:
+		if vertex.z < min_vertex.z:
+			min_vertex = vertex
+	return min_vertex
+
+func max_z(vertices):
+	var max_vertex = vertices[0]
+	for vertex in vertices:
+		if vertex.z > max_vertex.z:
+			max_vertex = vertex
+	return max_vertex
+
 # Does exactly what it says it does, shockingly
 func render_set_of_vertices_with_material(vertices, material):
 
 	# Specify the size and amount of vertices in each chunk. subdivide_width of 16 means a 16x16 grid in each chunk.
-	#var plane_mesh = PlaneMesh.new()
-	#plane_mesh.size = Vector2(chunk_size, chunk_size)
-	#plane_mesh.subdivide_depth = num_vertices_per_chunk
-	#plane_mesh.subdivide_width = num_vertices_per_chunk
-	#plane_mesh.material = material
+	# Set subdivide width based on the biome size, not full chunk size
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = Vector2(chunk_size, chunk_size)
+	plane_mesh.subdivide_depth = max_x(vertices) - min_x(vertices)
+	plane_mesh.subdivide_width = max_z(vertices) - min_z(vertices)
+	plane_mesh.material = material
 
 	# Feed through SurfaceTool
 	var st = SurfaceTool.new()

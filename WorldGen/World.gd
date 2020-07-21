@@ -148,10 +148,15 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
-	for chunk in chunks.values():
-		if Vector2(chunk.x_grid, chunk.z_grid).distance_to(Vector2(player_pos.x, player_pos.y)) > chunk_load_radius:
+	for key in chunks:
+		var chunk = chunks[key]
+		print(str(key))
+		# print("Current distance from chunk " + str(chunk.chunk_key) + " to player " + str(player_pos) + " is " + str(chunk.chunk_key.distance_to(player_pos)))
+		if chunk.chunk_key.distance_to(player_pos) > chunk_load_radius:
+			# print("Removed.")
 			chunks.erase(chunk.chunk_key)
 			chunk.call_deferred("free") # .queue_free() works here too
+
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
