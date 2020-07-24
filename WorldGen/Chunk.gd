@@ -46,7 +46,7 @@ func _ready():
 	self.water_level = percentiles[25]
 
 	# Actually start off generation stuff
-	generate_water()
+	# generate_water()
 	generate_chunk()
 
 func generate_chunk():
@@ -62,7 +62,7 @@ func generate_chunk():
 	var mountains = PoolVector3Array()
 
 	var vertex_noise_values = {}
-	for local_x in range(0, num_vertices_per_chunk + 1): # One more vertex than face. End of range() is exclusive
+	for local_x in range(0, num_vertices_per_chunk + 1):
 		for local_z in range(0, num_vertices_per_chunk + 1):
 
 			# Get it's width and height
@@ -102,6 +102,12 @@ func generate_chunk():
 	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
 	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
 
+	print("Ocean Vertices: " + str(ocean))
+	print("Beach Vertices: " + str(beach))
+	print("Lowlands Vertices: " + str(lowlands))
+	print("Highlands Vertices: " + str(highlands))
+	print("Mountains Vertices: " + str(mountains))
+
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_material)
 	render_set_of_vertices_with_material(beach, beach_material)
@@ -137,15 +143,20 @@ func calc_subchunk_dimensions(vertices):
 # Does exactly what it says it does, shockingly
 func render_set_of_vertices_with_material(vertices, material):
 
+	print("Material: " + str(material))
+
 	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLE_FAN)
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(material)
 
 	for vertex in vertices:
+		print("Adding vertex " + str(vertex) + " to Surface Tool.")
+		st.add_uv(Vector2(0, 1))
 		st.add_vertex(vertex)
+	st.generate_normals()
 
 	var mesh_instance = MeshInstance.new()
-	st.commit(mesh_instance) # Set it to whatever's contained in the SurfaceTool
+	mesh_instance.mesh = st.commit()
 	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 	add_child(mesh_instance)

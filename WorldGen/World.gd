@@ -100,7 +100,7 @@ func _process(_delta):
 	var chunks_per_frame = min(pow(chunk_load_radius, 1.1), 20)
 	load_closest_n_chunks(chunks_per_frame)
 
-	# Call this whenever we change chunks, and no more frequently. This is the mathematical maximum number of times we can call it without having any redundant calls, which is what we're going for.
+	# We only ever have chunks out of range the frame we move from one chunk to another
 	if changed_chunks_this_frame:
 		remove_far_chunks()
 
@@ -151,8 +151,9 @@ func load_closest_n_chunks(num_chunks_to_load):
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
 	for chunk_key in chunks:
+		print(chunk_key)
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
-			print("Chunk " + str(chunk_key) + " is too far! Removing.")
+			print("Chunk " + str(chunk_key) + " is too far! Removing from scene.")
 			chunks[chunk_key].call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk_key)
 
