@@ -27,10 +27,10 @@ func _init(noise_height, noise_moisture, chunk_key, chunk_size, max_height):
 	self.noise_height = noise_height
 	self.noise_moisture = noise_moisture
 
-	self.x = chunk_key.x
-	self.x_grid = chunk_key.x / chunk_size
-	self.z = chunk_key.y
-	self.z_grid = chunk_key.y / chunk_size
+	self.x = chunk_key.x * chunk_size
+	self.x_grid = chunk_key.x
+	self.z = chunk_key.y * chunk_size
+	self.z_grid = chunk_key.y
 
 	self.chunk_size = chunk_size
 	self.max_height = max_height
@@ -54,45 +54,39 @@ func generate_chunk():
 	# TODO: Implement biome blending. This will be a lot of easy-to-mix-up math, but I can figure out exact colors for every blended triangle beforehand.
 
 	# Iterate through each vertex, constructing a 2D array that holds the height (in actual height) and moisture (in noise) for each of the vertices in the plot
-	# Nothing computationally expensive in this loop, noise is (relatively) super cheap to generate
+	# TODO: This data type is passed by value (no idea why); If this takes up a bunch of processing time this is probably something I'll need to fix
+	var ocean = PoolVector3Array()
+	var beach = PoolVector3Array()
+	var lowlands = PoolVector3Array()
+	var highlands = PoolVector3Array()
+	var mountains = PoolVector3Array()
+
 	var vertex_noise_values = {}
 	for local_x in range(0, num_vertices_per_chunk + 1): # One more vertex than face. End of range() is exclusive
 		for local_z in range(0, num_vertices_per_chunk + 1):
-			var pos = Vector2(local_x, local_z)
-			vertex_noise_values[pos] = {}
-			vertex_noise_values[pos].height = world_node.noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z))
-			vertex_noise_values[pos].moisture = noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
-			# print("vertex at coords " + str(pos) + " has height " + str(vertex_noise_values[pos].height) + " and moisture " + str(vertex_noise_values[pos].moisture) + ".")
 
-	# Iterate through each "square", appending the coordinates of that square to our records for each biome
-	# Nothing computationally expensive in this loop either, dictionary access is constant time
-	var ocean = []
-	var beach = []
-	var lowlands = []
-	var highlands = []
-	var mountains = []
-	for local_x in range(0, num_vertices_per_chunk):
-		for local_z in range(0, num_vertices_per_chunk):
-			var pos_2d = Vector2(local_x, local_z)
-			var pos_3d = Vector3(local_x, vertex_noise_values[pos_2d].height, local_z)
+			# Get it's width and height
+			var vertex_height = world_node.noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z))
+			var vertex_moisture = noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
+			var pos_3d = Vector3(local_x, vertex_height, local_z)
 
 			# Ocean (0 to 25th Percentile)
-			if vertex_noise_values[pos_2d].height >= 0 && vertex_noise_values[pos_2d].height <= self.water_level:
+			if vertex_height >= 0 && vertex_height <= self.water_level:
 				ocean.append(pos_3d)
 				continue
 
 			# Beach (25th to 30th Percentile)
-			if vertex_noise_values[pos_2d].height > self.water_level && vertex_noise_values[pos_2d].height <= percentiles[30]:
+			if vertex_height > self.water_level && vertex_height <= percentiles[30]:
 				beach.append(pos_3d)
 				continue
 
 			# Lowlands (30th to 65th Percentile)
-			if vertex_noise_values[pos_2d].height > percentiles[30] && vertex_noise_values[pos_2d].height <= percentiles[65]:
+			if vertex_height > percentiles[30] && vertex_height <= percentiles[65]:
 				lowlands.append(pos_3d)
 				continue
 
 			# Highlands (65th to 85th Percentile)
-			if vertex_noise_values[pos_2d].height > percentiles[65] && vertex_noise_values[pos_2d].height <= percentiles[85]:
+			if vertex_height > percentiles[65] && vertex_height <= percentiles[85]:
 				highlands.append(pos_3d)
 				continue
 
@@ -115,62 +109,75 @@ func generate_chunk():
 	render_set_of_vertices_with_material(highlands, highlands_material)
 	render_set_of_vertices_with_material(mountains, mountains_material)
 
-# Returns [width, depth]
-func calc_chunk_subdivide_params(vertices):
-	var returnArr
+# Returns [subdivide_width, subdivide_depth]
+func calc_subchunk_dimensions(vertices):
 
-	var min_vertex = vertices[0]
-	var max_vertex = vertices[0]
-	for vertex in vertices:
-		if vertex.x < min_vertex.x:
-			min_vertex = vertex
-	return min_vertex
+	# First vertex is always our max and min
+	var min_x = vertices[0].x
+	var max_x = vertices[0].x
+	var min_z = vertices[0].z
+	var max_z = vertices[0].z
 
-func max_x(vertices):
-	var max_vertex = vertices[0]
+	# Iterate through and find the corners of the smallest square that circles all of them
 	for vertex in vertices:
-		if vertex.x > max_vertex.x:
-			max_vertex = vertex
-	return max_vertex
+		if vertex.x < min_x:
+			min_x = vertex.x
+		if vertex.x > max_x:
+			max_x = vertex.x
+		if vertex.z < min_z:
+			min_z = vertex.z
+		if vertex.z > max_z:
+			max_z = vertex.z
 
-func min_z(vertices):
-	var min_vertex = vertices[0]
-	for vertex in vertices:
-		if vertex.z < min_vertex.z:
-			min_vertex = vertex
-	return min_vertex
-
-func max_z(vertices):
-	var max_vertex = vertices[0]
-	for vertex in vertices:
-		if vertex.z > max_vertex.z:
-			max_vertex = vertex
-	return max_vertex
+	# Calculate actual subdivide width/depth
+	var width = max_x - min_x
+	var depth = max_z - min_z
+	return Vector2(width, depth)
 
 # Does exactly what it says it does, shockingly
 func render_set_of_vertices_with_material(vertices, material):
 
-	# Specify the size and amount of vertices in each chunk. subdivide_width of 16 means a 16x16 grid in each chunk.
-	# Set subdivide width based on the biome size, not full chunk size
-	var plane_mesh = PlaneMesh.new()
-	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.subdivide_depth = max_x(vertices) - min_x(vertices)
-	plane_mesh.subdivide_width = max_z(vertices) - min_z(vertices)
-	plane_mesh.material = material
-
-	# Feed through SurfaceTool
 	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_FAN)
 	st.set_material(material)
+
 	for vertex in vertices:
 		st.add_vertex(vertex)
 
-	# Apply to a mesh
 	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = st.commit()
-	mesh_instance.create_trimesh_collision()
+	st.commit(mesh_instance) # Set it to whatever's contained in the SurfaceTool
+	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 	add_child(mesh_instance)
+
+	# Initialize PlaneMesh to intended values
+	# This is like the "prototype" that we can just edit vertex values of to get what we want
+#	var plane_mesh = PlaneMesh.new()
+#	plane_mesh.size = calc_subchunk_dimensions(vertices)
+#	plane_mesh.subdivide_width = chunk_size * (1.0 / num_vertices_per_chunk)
+#	plane_mesh.subdivide_depth = chunk_size * (1.0 / num_vertices_per_chunk)
+#	plane_mesh.material = material
+
+	# Turn the mesh into something can dan use
+#	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code
+#	var data_tool = MeshDataTool.new() # Lets us grab vertices from stuff we already generated
+#	surface_tool.create_from(plane_mesh, 0)
+#	var array_plane = surface_tool.commit()
+#	var _error = data_tool.create_from_surface(array_plane, 0)
+#
+#	# Feed through SurfaceTool
+#	var st = SurfaceTool.new()
+#	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+#	st.set_material(material)
+#	for vertex in vertices:
+#		st.add_vertex(vertex)
+#
+#	# Apply to a mesh
+#	var mesh_instance = MeshInstance.new()
+#	mesh_instance.mesh = st.commit()
+#	mesh_instance.create_trimesh_collision()
+#	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
+#	add_child(mesh_instance)
 
 #	# Declaring Godot stuff we're going to use to draw the environment
 #	var surface_tool = SurfaceTool.new() # Godot's approach to drawing mesh from code

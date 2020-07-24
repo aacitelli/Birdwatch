@@ -52,6 +52,7 @@ func add_chunk(chunk_key):
 
 	chunks_loading_this_frame += 1
 	unready_chunks[chunk_key] = 1
+	# print("Calling load_chunk on key " + str(chunk_key))
 	load_chunk(chunk_key)
 
 # Initialize chunk and add it to the tree when we get idle time
@@ -64,6 +65,7 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
+	# print("Chunk " + str(chunk_key) + " done loading. Appending to our list of chunks.")
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 
@@ -148,15 +150,11 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
-	for key in chunks:
-		var chunk = chunks[key]
-		print(str(key))
-		# print("Current distance from chunk " + str(chunk.chunk_key) + " to player " + str(player_pos) + " is " + str(chunk.chunk_key.distance_to(player_pos)))
-		if chunk.chunk_key.distance_to(player_pos) > chunk_load_radius:
-			# print("Removed.")
-			chunks.erase(chunk.chunk_key)
-			chunk.call_deferred("free") # .queue_free() works here too
-
+	for chunk_key in chunks:
+		if chunk_key.distance_to(player_pos) > chunk_load_radius:
+			print("Chunk " + str(chunk_key) + " is too far! Removing.")
+			chunks[chunk_key].call_deferred("free") # .queue_free() works here too
+			chunks.erase(chunk_key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func noise_to_height(noise):
