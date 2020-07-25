@@ -87,52 +87,106 @@ func generate_chunk():
 			var br_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z + subgrid_unit_size)
 			var br_pos = Vector3(local_x + subgrid_unit_size, br_height, local_z + subgrid_unit_size)
 
-			# TODO: Make this more modular by having one master data structure that holds all of this. Can figure out the details when I get there; Currently just trying to make it *work*.
-			# Top-left triangle of the current block
+			# Calculate the average height of each triangle
 			var tl_height_average = (tl_height + tr_height + bl_height) / 3.0
-			if tl_height_average >= 0 and tl_height_average <= self.water_level:
-				ocean.append(tl_pos)
-				ocean.append(tr_pos)
-				ocean.append(bl_pos)
-			elif tl_height_average > self.water_level and tl_height_average <= percentiles[30]:
-				beach.append(tl_pos)
-				beach.append(tr_pos)
-				beach.append(bl_pos)
-			elif tl_height_average > percentiles[30] and tl_height_average <= percentiles[65]:
-				lowlands.append(tl_pos)
-				lowlands.append(tr_pos)
-				lowlands.append(bl_pos)
-			elif tl_height_average > percentiles[65] and tl_height_average <= percentiles[85]:
-				highlands.append(tl_pos)
-				highlands.append(tr_pos)
-				highlands.append(bl_pos)
-			else:
-				mountains.append(tl_pos)
-				mountains.append(tr_pos)
-				mountains.append(bl_pos)
-
-			# Bottom-right triangle of the current block
+			var tr_height_average = (tl_height + tr_height + br_height) / 3.0
+			var bl_height_average = (tl_height + bl_height + br_height) / 3.0
 			var br_height_average = (tr_height + bl_height + br_height) / 3.0
-			if br_height_average >= 0 and br_height_average <= self.water_level:
-				ocean.append(br_pos)
-				ocean.append(bl_pos)
-				ocean.append(tr_pos)
-			elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
-				beach.append(br_pos)
-				beach.append(bl_pos)
-				beach.append(tr_pos)
-			elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
-				lowlands.append(br_pos)
-				lowlands.append(bl_pos)
-				lowlands.append(tr_pos)
-			elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
-				highlands.append(br_pos)
-				highlands.append(bl_pos)
-				highlands.append(tr_pos)
+
+			# Always choose the triangle with the highest average and its complement
+			# Top-Left and Bottom-Right (drawn if either of the two is the max)
+			if tl_height_average >= tr_height_average and tl_height_average >= bl_height_average and tl_height_average >= br_height_average or br_height_average >= tl_height_average and br_height_average >= tr_height_average and br_height_average >= bl_height_average:
+
+				# Top-Left
+				if tl_height_average >= 0 and tl_height_average <= self.water_level:
+					ocean.append(tl_pos)
+					ocean.append(tr_pos)
+					ocean.append(bl_pos)
+				elif tl_height_average > self.water_level and tl_height_average <= percentiles[30]:
+					beach.append(tl_pos)
+					beach.append(tr_pos)
+					beach.append(bl_pos)
+				elif tl_height_average > percentiles[30] and tl_height_average <= percentiles[65]:
+					lowlands.append(tl_pos)
+					lowlands.append(tr_pos)
+					lowlands.append(bl_pos)
+				elif tl_height_average > percentiles[65] and tl_height_average <= percentiles[85]:
+					highlands.append(tl_pos)
+					highlands.append(tr_pos)
+					highlands.append(bl_pos)
+				else:
+					mountains.append(tl_pos)
+					mountains.append(tr_pos)
+					mountains.append(bl_pos)
+
+				# Bottom-Right
+				if br_height_average >= 0 and br_height_average <= self.water_level:
+					ocean.append(br_pos)
+					ocean.append(bl_pos)
+					ocean.append(tr_pos)
+				elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
+					beach.append(br_pos)
+					beach.append(bl_pos)
+					beach.append(tr_pos)
+				elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
+					lowlands.append(br_pos)
+					lowlands.append(bl_pos)
+					lowlands.append(tr_pos)
+				elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
+					highlands.append(br_pos)
+					highlands.append(bl_pos)
+					highlands.append(tr_pos)
+				else:
+					mountains.append(br_pos)
+					mountains.append(bl_pos)
+					mountains.append(tr_pos)
+
+			# Top-Right and Bottom Left
 			else:
-				mountains.append(br_pos)
-				mountains.append(bl_pos)
-				mountains.append(tr_pos)
+
+				# Top-Right
+				if tr_height_average >= 0 and tr_height_average <= self.water_level:
+					ocean.append(tl_pos)
+					ocean.append(tr_pos)
+					ocean.append(br_pos)
+				elif tr_height_average > self.water_level and tr_height_average <= percentiles[30]:
+					beach.append(tl_pos)
+					beach.append(tr_pos)
+					beach.append(br_pos)
+				elif tr_height_average > percentiles[30] and tr_height_average <= percentiles[65]:
+					lowlands.append(tl_pos)
+					lowlands.append(tr_pos)
+					lowlands.append(br_pos)
+				elif tr_height_average > percentiles[65] and tr_height_average <= percentiles[85]:
+					highlands.append(tl_pos)
+					highlands.append(tr_pos)
+					highlands.append(br_pos)
+				else:
+					mountains.append(tl_pos)
+					mountains.append(tr_pos)
+					mountains.append(br_pos)
+
+				# Bottom-Left
+				if bl_height_average >= 0 and bl_height_average <= self.water_level:
+					ocean.append(br_pos)
+					ocean.append(bl_pos)
+					ocean.append(tl_pos)
+				elif bl_height_average > self.water_level and bl_height_average <= percentiles[30]:
+					beach.append(br_pos)
+					beach.append(bl_pos)
+					beach.append(tl_pos)
+				elif bl_height_average > percentiles[30] and bl_height_average <= percentiles[65]:
+					lowlands.append(br_pos)
+					lowlands.append(bl_pos)
+					lowlands.append(tl_pos)
+				elif bl_height_average > percentiles[65] and bl_height_average <= percentiles[85]:
+					highlands.append(br_pos)
+					highlands.append(bl_pos)
+					highlands.append(tl_pos)
+				else:
+					mountains.append(br_pos)
+					mountains.append(bl_pos)
+					mountains.append(tl_pos)
 
 	# Materials for each biome
 	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
