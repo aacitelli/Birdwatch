@@ -24,6 +24,9 @@ func _physics_process(delta):
 	process_input(delta)
 	process_movement(delta)
 
+func _process(_delta):
+	$CanvasLayer/Position.text = "Position: " + str(self.translation)
+
 func process_input(_delta):
 
 	# Mapping key presses to what direction we should be going

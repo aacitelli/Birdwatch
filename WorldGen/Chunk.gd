@@ -80,16 +80,12 @@ func generate_chunk():
 			# Get the four vertices around this block; They are what we do calculations with
 			var tl_height = world.get_height(x + local_x, 0, z + local_z)
 			var tl_pos = Vector3(local_x, tl_height, local_z)
-#			print("tl_pos: " + str(tl_pos))
 			var tr_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z)
 			var tr_pos = Vector3(local_x + subgrid_unit_size, tr_height, local_z)
-#			print("tr_pos: " + str(tr_pos))
 			var bl_height = world.get_height(x + local_x, 0, z + local_z + subgrid_unit_size)
 			var bl_pos = Vector3(local_x, bl_height, local_z + subgrid_unit_size)
-#			print("bl_pos: " + str(bl_pos))
 			var br_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z + subgrid_unit_size)
 			var br_pos = Vector3(local_x + subgrid_unit_size, br_height, local_z + subgrid_unit_size)
-#			print("br_pos: " + str(br_pos))
 
 			# TODO: Make this more modular by having one master data structure that holds all of this. Can figure out the details when I get there; Currently just trying to make it *work*.
 			# Top-left triangle of the current block
@@ -145,11 +141,11 @@ func generate_chunk():
 	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
 	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
 
-#	print("Ocean Vertices: " + str(ocean))
-#	print("Beach Vertices: " + str(beach))
-#	print("Lowlands Vertices: " + str(lowlands))
-#	print("Highlands Vertices: " + str(highlands))
-#	print("Mountains Vertices: " + str(mountains))
+	print("Ocean Vertices: " + str(ocean))
+	print("Beach Vertices: " + str(beach))
+	print("Lowlands Vertices: " + str(lowlands))
+	print("Highlands Vertices: " + str(highlands))
+	print("Mountains Vertices: " + str(mountains))
 
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_material)
