@@ -79,16 +79,16 @@ func generate_chunk():
 			# TODO: Implement moisture
 			# Get the four vertices around this block; They are what we do calculations with
 			var tl_height = world.get_height(x + local_x, 0, z + local_z)
-			var tl_pos = Vector3(x + local_x, tl_height, z + local_z)
+			var tl_pos = Vector3(local_x, tl_height, local_z)
 #			print("tl_pos: " + str(tl_pos))
 			var tr_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z)
-			var tr_pos = Vector3(x + local_x + subgrid_unit_size, tr_height, z + local_z)
+			var tr_pos = Vector3(local_x + subgrid_unit_size, tr_height, local_z)
 #			print("tr_pos: " + str(tr_pos))
 			var bl_height = world.get_height(x + local_x, 0, z + local_z + subgrid_unit_size)
-			var bl_pos = Vector3(x + local_x, bl_height, z + local_z + subgrid_unit_size)
+			var bl_pos = Vector3(local_x, bl_height, local_z + subgrid_unit_size)
 #			print("bl_pos: " + str(bl_pos))
 			var br_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z + subgrid_unit_size)
-			var br_pos = Vector3(x + local_x + subgrid_unit_size, br_height, z + local_z + subgrid_unit_size)
+			var br_pos = Vector3(local_x + subgrid_unit_size, br_height, local_z + subgrid_unit_size)
 #			print("br_pos: " + str(br_pos))
 
 			# TODO: Make this more modular by having one master data structure that holds all of this. Can figure out the details when I get there; Currently just trying to make it *work*.
@@ -181,6 +181,8 @@ func generate_water():
 	var mesh_instance = MeshInstance.new()
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.translation.y = water_level
+#	mesh_instance.translation.x = x
+#	mesh_instance.translation.z = z
 	add_child(mesh_instance)
 
 # Returns [subdivide_width, subdivide_depth]

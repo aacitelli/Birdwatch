@@ -59,7 +59,7 @@ func add_chunk(chunk_key):
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
 	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
-	# chunk.translation = Vector3(chunk.x, 0, chunk.z)
+	chunk.translation = Vector3(chunk.x, 0, chunk.z)
 	call_deferred("load_done", chunk)
 
 # Add chunk to tree and move chunk from unready chunks to ready chunks
