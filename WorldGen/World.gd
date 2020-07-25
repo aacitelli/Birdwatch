@@ -114,8 +114,6 @@ func _process(_delta):
 	if changed_chunks_this_frame:
 		if thread.is_active():
 			thread.wait_to_finish()
-
-		# Basically when you call stuff with threads, you need at least one argum
 		var _error = thread.start(self, "remove_far_chunks", [])
 
 func load_closest_n_chunks(num_chunks_to_load):
@@ -165,7 +163,7 @@ func load_closest_n_chunks(num_chunks_to_load):
 # Removes any chunks deemed too far away from the scene
 # We don't actually use this argument; The Thread API doesn't let us call it otherwise though, for some reason
 # See here: https://github.com/godotengine/godot/issues/9924
-func remove_far_chunks(_thread_arr):
+func remove_far_chunks(_dummy_thread_arg):
 
 	# Note: You need to use chunks.values() here because if you use anything else Godot immediately gets out of the loop if you modify it during (from what I can tell)
 	for chunk in chunks.values():
