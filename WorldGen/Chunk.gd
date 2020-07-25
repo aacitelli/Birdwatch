@@ -8,7 +8,6 @@ var x
 var x_grid
 var z
 var z_grid
-var chunk_size
 var max_height
 var chunk_key
 
@@ -21,6 +20,7 @@ var water_level
 var world
 var percentiles
 var num_vertices_per_chunk
+var chunk_size
 
 func _init(p_noise_height, p_noise_moisture, p_chunk_key, p_chunk_size, p_max_height):
 
@@ -32,6 +32,7 @@ func _init(p_noise_height, p_noise_moisture, p_chunk_key, p_chunk_size, p_max_he
 
 	self.noise_height = p_noise_height
 	self.noise_moisture = p_noise_moisture
+	self.chunk_size = p_chunk_size
 
 	self.x = p_chunk_key.x * p_chunk_size
 	self.x_grid = p_chunk_key.x
@@ -72,19 +73,23 @@ func generate_chunk():
 	# This loop inserts triplets of three vertices to make up each "triangle" of the terrain
 	var subgrid_unit_size = chunk_size / num_vertices_per_chunk
 
-#	print("subgrid_unit_size: " + str(subgrid_unit_size))
-	for local_x in range(0, chunk_size, subgrid_unit_size):
-		for local_z in range(0, chunk_size, subgrid_unit_size):
+	print("chunk_size: " + str(chunk_size))
+	print("subgrid_unit_size: " + str(subgrid_unit_size))
 
-			# TODO: Implement moisture
-			# Get the four vertices around this block; They are what we do calculations with
+	# Range doesn't take decimals (i.e. if subgrid unit size is a decimal) so we use while loops
+	var local_x = 0
+	while local_x <= chunk_size:
+		var local_z = 0
+		while local_z <= chunk_size:
+
+			# Get positions (including heights) of the cour corners
 			var tl_height = world.get_height(x + local_x, 0, z + local_z)
-			var tl_pos = Vector3(local_x, tl_height, local_z)
 			var tr_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z)
-			var tr_pos = Vector3(local_x + subgrid_unit_size, tr_height, local_z)
 			var bl_height = world.get_height(x + local_x, 0, z + local_z + subgrid_unit_size)
-			var bl_pos = Vector3(local_x, bl_height, local_z + subgrid_unit_size)
 			var br_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z + subgrid_unit_size)
+			var tl_pos = Vector3(local_x, tl_height, local_z)
+			var tr_pos = Vector3(local_x + subgrid_unit_size, tr_height, local_z)
+			var bl_pos = Vector3(local_x, bl_height, local_z + subgrid_unit_size)
 			var br_pos = Vector3(local_x + subgrid_unit_size, br_height, local_z + subgrid_unit_size)
 
 			# Calculate the average height of each triangle
@@ -187,6 +192,9 @@ func generate_chunk():
 					mountains.append(br_pos)
 					mountains.append(bl_pos)
 					mountains.append(tl_pos)
+
+			local_z += subgrid_unit_size
+		local_x += subgrid_unit_size
 
 	# Materials for each biome
 	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
