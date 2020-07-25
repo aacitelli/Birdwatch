@@ -2,7 +2,7 @@ extends Spatial
 
 # Chunk-related constants
 const chunk_size = 4.0
-const chunk_load_radius = 8
+const chunk_load_radius = 16
 const num_vertices_per_chunk = 8.0
 
 # Height & Moisture Map Generation
@@ -18,6 +18,10 @@ var chunks_loading_this_frame # Current system generates n chunks every frame b/
 
 # Vector2 representing player grid position
 var player_pos
+
+# Thread used for terrain generation
+# Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
+var thread
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
@@ -42,6 +46,9 @@ func _ready():
 	moisture_map_noise.octaves = 4
 	moisture_map_noise.period = 220
 
+	# Thread used for terrain generation so we do it during main thread downtime
+	thread = Thread.new()
+
 	# Update our percentiles list on load time
 	generate_percentiles()
 
@@ -51,10 +58,13 @@ func add_chunk(chunk_key):
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
 		return
 
+	# Wait until the thread is done to go ahead and do this
+	if thread.is_active():
+		thread.wait_to_finish()
 	chunks_loading_this_frame += 1
 	unready_chunks[chunk_key] = 1
-	# print("Calling load_chunk on key " + str(chunk_key))
-	load_chunk(chunk_key)
+	# print("Starting thread @ load_chunk " + str(chunk_key))
+	var _error = thread.start(self, "load_chunk", chunk_key)
 
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
@@ -66,7 +76,6 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
-	# print("Chunk " + str(chunk_key) + " done loading. Appending to our list of chunks.")
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
 

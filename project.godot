@@ -24,10 +24,6 @@ config/name="Birdwatch"
 run/main_scene="res://Core/Main.tscn"
 config/icon="res://icon.png"
 
-[debug]
-
-settings/stdout/print_fps=true
-
 [display]
 
 window/vsync/use_vsync=false

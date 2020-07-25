@@ -26,6 +26,7 @@ func _physics_process(delta):
 
 func _process(_delta):
 	$CanvasLayer/Position.text = "Position: " + str(self.translation)
+	$CanvasLayer/FPS.text = "FPS: " + str(Engine.get_frames_per_second())
 
 func process_input(_delta):
 

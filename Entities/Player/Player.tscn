@@ -34,3 +34,13 @@ custom_fonts/normal_font = ExtResource( 4 )
 __meta__ = {
 "_edit_use_anchors_": false
 }
+
+[node name="FPS" type="RichTextLabel" parent="CanvasLayer"]
+margin_left = 15.0
+margin_top = 75.0
+margin_right = 900.0
+margin_bottom = 120.0
+custom_fonts/normal_font = ExtResource( 4 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
