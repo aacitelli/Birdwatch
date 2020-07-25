@@ -151,10 +151,11 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
+
+	# Note: You need to use chunks.values() here because if you use anything else Godot immediately gets out of the loop if you modify it during (from what I can tell)
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
-			print("Chunk " + str(chunk_key) + " is too far! Removing from scene.")
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk_key)
 
