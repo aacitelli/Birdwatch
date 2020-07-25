@@ -63,20 +63,16 @@ func generate_chunk():
 
 	# Iterate through each vertex, constructing a 2D array that holds the height (in actual height) and moisture (in noise) for each of the vertices in the plot
 	# TODO: This data type is passed by value (no idea why); If this takes up a bunch of processing time this is probably something I'll need to fix
-	var ocean = []
-	var beach = []
-	var lowlands = []
-	var highlands = []
-	var mountains = []
+	var ocean = PoolVector3Array()
+	var beach = PoolVector3Array()
+	var lowlands = PoolVector3Array()
+	var highlands = PoolVector3Array()
+	var mountains = PoolVector3Array()
 
-	# I will never choose a chunk_size that isn't cleanly divisible by the number of vertices, so no weird decimal math should happen here
-	# This loop inserts triplets of three vertices to make up each "triangle" of the terrain
+	# The amount of width/depth that is in between each actual vertex. Basically a grid inside the main chunk grid, hence "subgrid"
 	var subgrid_unit_size = chunk_size / num_vertices_per_chunk
 
-	print("chunk_size: " + str(chunk_size))
-	print("subgrid_unit_size: " + str(subgrid_unit_size))
-
-	# Range doesn't take decimals (i.e. if subgrid unit size is a decimal) so we use while loops
+	# range() doesn't take decimals, hence the while loops
 	var local_x = 0
 	while local_x <= chunk_size:
 		var local_z = 0

@@ -1,9 +1,9 @@
 extends Spatial
 
 # Chunk-related constants
-const chunk_size = 8.0
+const chunk_size = 4.0
 const chunk_load_radius = 8
-const num_vertices_per_chunk = 16.0
+const num_vertices_per_chunk = 8.0
 
 # Height & Moisture Map Generation
 var height_map_noise
