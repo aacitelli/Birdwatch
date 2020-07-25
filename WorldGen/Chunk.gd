@@ -53,7 +53,7 @@ func _ready():
 	self.water_level = percentiles[25]
 
 	# Actually start off generation stuff
-	generate_water()
+	# generate_water()
 	generate_chunk()
 
 func generate_chunk():
@@ -114,25 +114,25 @@ func generate_chunk():
 			# Bottom-right triangle of the current block
 			var br_height_average = (tr_height + bl_height + br_height) / 3.0
 			if br_height_average >= 0 and br_height_average <= self.water_level:
-				ocean.append(tr_pos)
-				ocean.append(bl_pos)
 				ocean.append(br_pos)
+				ocean.append(bl_pos)
+				ocean.append(tr_pos)
 			elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
-				beach.append(tr_pos)
-				beach.append(bl_pos)
 				beach.append(br_pos)
+				beach.append(bl_pos)
+				beach.append(tr_pos)
 			elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
-				lowlands.append(tr_pos)
-				lowlands.append(bl_pos)
 				lowlands.append(br_pos)
+				lowlands.append(bl_pos)
+				lowlands.append(tr_pos)
 			elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
-				highlands.append(tr_pos)
-				highlands.append(bl_pos)
 				highlands.append(br_pos)
+				highlands.append(bl_pos)
+				highlands.append(tr_pos)
 			else:
-				mountains.append(tr_pos)
-				mountains.append(bl_pos)
 				mountains.append(br_pos)
+				mountains.append(bl_pos)
+				mountains.append(tr_pos)
 
 	# Materials for each biome
 	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
@@ -141,11 +141,11 @@ func generate_chunk():
 	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
 	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
 
-	print("Ocean Vertices: " + str(ocean))
-	print("Beach Vertices: " + str(beach))
-	print("Lowlands Vertices: " + str(lowlands))
-	print("Highlands Vertices: " + str(highlands))
-	print("Mountains Vertices: " + str(mountains))
+#	print("Ocean Vertices: " + str(ocean))
+#	print("Beach Vertices: " + str(beach))
+#	print("Lowlands Vertices: " + str(lowlands))
+#	print("Highlands Vertices: " + str(highlands))
+#	print("Mountains Vertices: " + str(mountains))
 
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_material)
