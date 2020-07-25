@@ -53,7 +53,7 @@ func _ready():
 	self.water_level = percentiles[25]
 
 	# Actually start off generation stuff
-	# generate_water()
+	generate_water()
 	generate_chunk()
 
 func generate_chunk():
