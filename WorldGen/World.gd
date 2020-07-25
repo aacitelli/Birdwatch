@@ -1,8 +1,9 @@
 extends Spatial
 
-# Constants we pass into each chunk
+# Chunk-related constants
 const chunk_size = 16
 const chunk_load_radius = 16
+const num_vertices_per_chunk = 4
 
 # Height & Moisture Map Generation
 var height_map_noise
@@ -58,7 +59,7 @@ func add_chunk(chunk_key):
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
 	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
-	chunk.translation = Vector3(chunk_key.x * chunk_size, 0, chunk_key.y * chunk_size)
+	# chunk.translation = Vector3(chunk.x, 0, chunk.z)
 	call_deferred("load_done", chunk)
 
 # Add chunk to tree and move chunk from unready chunks to ready chunks
@@ -151,26 +152,29 @@ func load_closest_n_chunks(num_chunks_to_load):
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks():
 	for chunk_key in chunks:
-		print(chunk_key)
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
 			print("Chunk " + str(chunk_key) + " is too far! Removing from scene.")
 			chunks[chunk_key].call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk_key)
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
-func noise_to_height(noise):
-	noise = noise_to_height_no_scaling(noise) # Let other function do all the work up to scaling for SpoC reasons
+func get_height(x, y, z):
+	var noise = get_height_no_scaling(x, y, z) # Let other function do all the work up to scaling for SpoC reasons
 	noise *= scaling_factor # Scale so that mountains are near 100 height
 	if noise > MAX_HEIGHT:
 		print("Generated something above max height; Fix the noise function!")
 	return floor(noise)
 
 # Used to generate the percentiles (b/c normal generation scales BY the percentiles)
-func noise_to_height_no_scaling(noise):
+func get_height_no_scaling(x, y, z):
+	var noise = height_map_noise.get_noise_3d(x, y, z)
 	noise = (noise + 1) / 2 # Transform [-1, 1] to [0, 1]
 	noise = pow(noise, 3) # Accentuates mountains and makes flat areas more common
 	noise *= MAX_HEIGHT # Convert noise to an actual height
 	return noise
+
+func get_moisture(x, y, z):
+	return moisture_map_noise.get_noise_3d(x, y, z)
 
 # Perlin noise is essentially a random distribution. So, it's best to use *percentiles*, not actual heights relative to the max. I regenerate these and hardcode them in whenever I change my height map at all, and just put the hardcoded numbers into shader and chunk classes.
 func generate_percentiles():
@@ -188,7 +192,7 @@ func generate_percentiles():
 	for x in range(horiz_lower, horiz_upper, horiz_step):
 		for y in range(y_lower, y_upper, y_step):
 			for z in range(horiz_lower, horiz_upper, horiz_step):
-				height_map.append(noise_to_height_no_scaling(height_map_noise.get_noise_3d(x, y, z)))
+				height_map.append(get_height_no_scaling(x, y, z))
 	height_map.sort()
 
 	percentiles = []
@@ -202,6 +206,6 @@ func generate_percentiles():
 	for i in range(0, percentiles.size()):
 		percentiles[i] *= scaling_factor
 
-	print("scaling_factor: " + str(scaling_factor))
-	print("percentiles: " + str(percentiles))
+	# print("scaling_factor: " + str(scaling_factor))
+	# print("percentiles: " + str(percentiles))
 

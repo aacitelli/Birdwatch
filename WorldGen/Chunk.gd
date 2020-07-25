@@ -17,36 +17,43 @@ var noise_moisture
 var should_remove
 var water_level
 
-var world_node
+# Chunk Parameters
+var world
 var percentiles
+var num_vertices_per_chunk
 
-const num_vertices_per_chunk = 4
+func _init(p_noise_height, p_noise_moisture, p_chunk_key, p_chunk_size, p_max_height):
 
-func _init(noise_height, noise_moisture, chunk_key, chunk_size, max_height):
+#	print("p_noise_height: " + str(p_noise_height))
+#	print("p_noise_moisture: " + str(p_noise_moisture))
+#	print("p_chunk_key: " + str(p_chunk_key))
+#	print("p_chunk_size: " + str(p_chunk_size))
+#	print("p_max_height: " + str(p_max_height))
 
-	self.noise_height = noise_height
-	self.noise_moisture = noise_moisture
+	self.noise_height = p_noise_height
+	self.noise_moisture = p_noise_moisture
 
-	self.x = chunk_key.x * chunk_size
-	self.x_grid = chunk_key.x
-	self.z = chunk_key.y * chunk_size
-	self.z_grid = chunk_key.y
+	self.x = p_chunk_key.x * p_chunk_size
+	self.x_grid = p_chunk_key.x
+	self.z = p_chunk_key.y * p_chunk_size
+	self.z_grid = p_chunk_key.y
 
-	self.chunk_size = chunk_size
-	self.max_height = max_height
-	self.chunk_key = chunk_key
+	self.chunk_size = p_chunk_size
+	self.max_height = p_max_height
+	self.chunk_key = p_chunk_key
 
 func _ready():
 
 	# We use this reference a lot, helps with readability
-	world_node = get_node("/root/Main/WorldEnvironment/World")
+	world = get_node("/root/Main/WorldEnvironment/World")
 
 	# Grab values we use frequently here from parent
-	self.percentiles = world_node.percentiles
+	self.percentiles = world.percentiles
+	self.num_vertices_per_chunk = world.num_vertices_per_chunk
 	self.water_level = percentiles[25]
 
 	# Actually start off generation stuff
-	# generate_water()
+	generate_water()
 	generate_chunk()
 
 func generate_chunk():
@@ -55,45 +62,81 @@ func generate_chunk():
 
 	# Iterate through each vertex, constructing a 2D array that holds the height (in actual height) and moisture (in noise) for each of the vertices in the plot
 	# TODO: This data type is passed by value (no idea why); If this takes up a bunch of processing time this is probably something I'll need to fix
-	var ocean = PoolVector3Array()
-	var beach = PoolVector3Array()
-	var lowlands = PoolVector3Array()
-	var highlands = PoolVector3Array()
-	var mountains = PoolVector3Array()
+	var ocean = []
+	var beach = []
+	var lowlands = []
+	var highlands = []
+	var mountains = []
 
-	var vertex_noise_values = {}
-	for local_x in range(0, num_vertices_per_chunk + 1):
-		for local_z in range(0, num_vertices_per_chunk + 1):
+	# I will never choose a chunk_size that isn't cleanly divisible by the number of vertices, so no weird decimal math should happen here
+	# This loop inserts triplets of three vertices to make up each "triangle" of the terrain
+	var subgrid_unit_size = chunk_size / num_vertices_per_chunk
 
-			# Get it's width and height
-			var vertex_height = world_node.noise_to_height(noise_height.get_noise_3d(x + local_x, 0, z + local_z))
-			var vertex_moisture = noise_moisture.get_noise_3d(x + local_x, 0, z + local_z)
-			var pos_3d = Vector3(local_x, vertex_height, local_z)
+#	print("subgrid_unit_size: " + str(subgrid_unit_size))
+	for local_x in range(0, chunk_size, subgrid_unit_size):
+		for local_z in range(0, chunk_size, subgrid_unit_size):
 
-			# Ocean (0 to 25th Percentile)
-			if vertex_height >= 0 && vertex_height <= self.water_level:
-				ocean.append(pos_3d)
-				continue
+			# TODO: Implement moisture
+			# Get the four vertices around this block; They are what we do calculations with
+			var tl_height = world.get_height(x + local_x, 0, z + local_z)
+			var tl_pos = Vector3(x + local_x, tl_height, z + local_z)
+#			print("tl_pos: " + str(tl_pos))
+			var tr_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z)
+			var tr_pos = Vector3(x + local_x + subgrid_unit_size, tr_height, z + local_z)
+#			print("tr_pos: " + str(tr_pos))
+			var bl_height = world.get_height(x + local_x, 0, z + local_z + subgrid_unit_size)
+			var bl_pos = Vector3(x + local_x, bl_height, z + local_z + subgrid_unit_size)
+#			print("bl_pos: " + str(bl_pos))
+			var br_height = world.get_height(x + local_x + subgrid_unit_size, 0, z + local_z + subgrid_unit_size)
+			var br_pos = Vector3(x + local_x + subgrid_unit_size, br_height, z + local_z + subgrid_unit_size)
+#			print("br_pos: " + str(br_pos))
 
-			# Beach (25th to 30th Percentile)
-			if vertex_height > self.water_level && vertex_height <= percentiles[30]:
-				beach.append(pos_3d)
-				continue
-
-			# Lowlands (30th to 65th Percentile)
-			if vertex_height > percentiles[30] && vertex_height <= percentiles[65]:
-				lowlands.append(pos_3d)
-				continue
-
-			# Highlands (65th to 85th Percentile)
-			if vertex_height > percentiles[65] && vertex_height <= percentiles[85]:
-				highlands.append(pos_3d)
-				continue
-
-			# Mountains (85th Percentile Up)
+			# TODO: Make this more modular by having one master data structure that holds all of this. Can figure out the details when I get there; Currently just trying to make it *work*.
+			# Top-left triangle of the current block
+			var tl_height_average = (tl_height + tr_height + bl_height) / 3.0
+			if tl_height_average >= 0 and tl_height_average <= self.water_level:
+				ocean.append(tl_pos)
+				ocean.append(tr_pos)
+				ocean.append(bl_pos)
+			elif tl_height_average > self.water_level and tl_height_average <= percentiles[30]:
+				beach.append(tl_pos)
+				beach.append(tr_pos)
+				beach.append(bl_pos)
+			elif tl_height_average > percentiles[30] and tl_height_average <= percentiles[65]:
+				lowlands.append(tl_pos)
+				lowlands.append(tr_pos)
+				lowlands.append(bl_pos)
+			elif tl_height_average > percentiles[65] and tl_height_average <= percentiles[85]:
+				highlands.append(tl_pos)
+				highlands.append(tr_pos)
+				highlands.append(bl_pos)
 			else:
-				mountains.append(pos_3d)
-				continue
+				mountains.append(tl_pos)
+				mountains.append(tr_pos)
+				mountains.append(bl_pos)
+
+			# Bottom-right triangle of the current block
+			var br_height_average = (tr_height + bl_height + br_height) / 3.0
+			if br_height_average >= 0 and br_height_average <= self.water_level:
+				ocean.append(tr_pos)
+				ocean.append(bl_pos)
+				ocean.append(br_pos)
+			elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
+				beach.append(tr_pos)
+				beach.append(bl_pos)
+				beach.append(br_pos)
+			elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
+				lowlands.append(tr_pos)
+				lowlands.append(bl_pos)
+				lowlands.append(br_pos)
+			elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
+				highlands.append(tr_pos)
+				highlands.append(bl_pos)
+				highlands.append(br_pos)
+			else:
+				mountains.append(tr_pos)
+				mountains.append(bl_pos)
+				mountains.append(br_pos)
 
 	# Materials for each biome
 	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
@@ -102,11 +145,11 @@ func generate_chunk():
 	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
 	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
 
-	print("Ocean Vertices: " + str(ocean))
-	print("Beach Vertices: " + str(beach))
-	print("Lowlands Vertices: " + str(lowlands))
-	print("Highlands Vertices: " + str(highlands))
-	print("Mountains Vertices: " + str(mountains))
+#	print("Ocean Vertices: " + str(ocean))
+#	print("Beach Vertices: " + str(beach))
+#	print("Lowlands Vertices: " + str(lowlands))
+#	print("Highlands Vertices: " + str(highlands))
+#	print("Mountains Vertices: " + str(mountains))
 
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_material)
@@ -114,6 +157,31 @@ func generate_chunk():
 	render_set_of_vertices_with_material(lowlands, lowlands_material)
 	render_set_of_vertices_with_material(highlands, highlands_material)
 	render_set_of_vertices_with_material(mountains, mountains_material)
+
+# Does exactly what it says it does, shockingly
+func render_set_of_vertices_with_material(vertices, material):
+
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(material)
+
+	for vertex in vertices:
+		st.add_vertex(vertex)
+
+	var mesh_instance = MeshInstance.new()
+	mesh_instance.mesh = st.commit()
+	# mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
+	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
+	add_child(mesh_instance)
+
+func generate_water():
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = Vector2(chunk_size, chunk_size)
+	plane_mesh.material = preload("res:///WorldGen/water.material")
+	var mesh_instance = MeshInstance.new()
+	mesh_instance.mesh = plane_mesh
+	mesh_instance.translation.y = water_level
+	add_child(mesh_instance)
 
 # Returns [subdivide_width, subdivide_depth]
 func calc_subchunk_dimensions(vertices):
@@ -140,27 +208,7 @@ func calc_subchunk_dimensions(vertices):
 	var depth = max_z - min_z
 	return Vector2(width, depth)
 
-# Does exactly what it says it does, shockingly
-func render_set_of_vertices_with_material(vertices, material):
-
-	print("Material: " + str(material))
-
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_material(material)
-
-	for vertex in vertices:
-		print("Adding vertex " + str(vertex) + " to Surface Tool.")
-		st.add_uv(Vector2(0, 1))
-		st.add_vertex(vertex)
-	st.generate_normals()
-
-	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = st.commit()
-	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
-	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
-	add_child(mesh_instance)
-
+# A bunch of saved code incase I need it:
 	# Initialize PlaneMesh to intended values
 	# This is like the "prototype" that we can just edit vertex values of to get what we want
 #	var plane_mesh = PlaneMesh.new()
@@ -223,14 +271,5 @@ func render_set_of_vertices_with_material(vertices, material):
 #	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
 #	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 #	add_child(mesh_instance)
-
-func generate_water():
-	var plane_mesh = PlaneMesh.new()
-	plane_mesh.size = Vector2(chunk_size, chunk_size)
-	plane_mesh.material = preload("res:///WorldGen/water.material")
-	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = plane_mesh
-	mesh_instance.translation.y = water_level
-	add_child(mesh_instance)
 
 
