@@ -181,8 +181,6 @@ func generate_water():
 	var mesh_instance = MeshInstance.new()
 	mesh_instance.mesh = plane_mesh
 	mesh_instance.translation.y = water_level
-#	mesh_instance.translation.x = x
-#	mesh_instance.translation.z = z
 	add_child(mesh_instance)
 
 # Returns [subdivide_width, subdivide_depth]

@@ -1,4 +1,5 @@
 extends CanvasLayer
 
 func _process(_delta):
-	$Label.text = str(get_parent().translation)
+	$Position.text = "Position: " + str(get_parent().translation)
+	$Orientation.text = "Rotation: " + str(get_parent().rotation_degrees)

@@ -153,7 +153,7 @@ func load_closest_n_chunks(num_chunks_to_load):
 func remove_far_chunks():
 	for chunk_key in chunks:
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
-			print("Chunk " + str(chunk_key) + " is too far! Removing from scene.")
+			# print("Chunk " + str(chunk_key) + " is too far! Removing from scene.")
 			chunks[chunk_key].call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk_key)
 
