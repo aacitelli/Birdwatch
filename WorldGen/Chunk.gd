@@ -1,8 +1,6 @@
 extends Spatial
 class_name Chunk
 
-# TODO: Figure out what this all does, commenting it all out
-
 # Constructor variables
 var x
 var x_grid
@@ -29,12 +27,6 @@ var color_light_gray = Color(196, 196, 196)
 var color_white = Color(240, 240, 240)
 
 func _init(p_noise_height, p_noise_moisture, p_chunk_key, p_chunk_size, p_max_height):
-
-#	print("p_noise_height: " + str(p_noise_height))
-#	print("p_noise_moisture: " + str(p_noise_moisture))
-#	print("p_chunk_key: " + str(p_chunk_key))
-#	print("p_chunk_size: " + str(p_chunk_size))
-#	print("p_max_height: " + str(p_max_height))
 
 	self.noise_height = p_noise_height
 	self.noise_moisture = p_noise_moisture
@@ -81,7 +73,7 @@ func generate_chunk():
 	var mountains_colors = PoolColorArray()
 
 	# The amount of width/depth that is in between each actual vertex. Basically a grid inside the main chunk grid, hence "subgrid"
-	var subgrid_unit_size = chunk_size / num_vertices_per_chunk
+	var subgrid_unit_size = 1.0 * chunk_size / num_vertices_per_chunk
 
 	# TODO: This chunk shares edge vertices with other chunks. Don't do the noise calculation twice for these. (This can be done way down the road b/c the performance increase is small and it requires a little bit of work across Chunk instances)
 

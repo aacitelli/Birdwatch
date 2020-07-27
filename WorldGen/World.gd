@@ -1,9 +1,9 @@
 extends Spatial
 
 # Chunk-related constants
-const chunk_size = 4.0
+const chunk_size = 4 # Has to be a float
 const chunk_load_radius = 8
-const num_vertices_per_chunk = 8.0
+const num_vertices_per_chunk = 4 # Has to be a float
 
 # Height & Moisture Map Generation
 var height_map_noise
@@ -11,10 +11,15 @@ var moisture_map_noise
 var scaling_factor # Scale everything up to our max height after noise generation
 var MAX_HEIGHT = 100
 
-# Our data structures to keep track of chunks in our game
+# Our record of the currently loaded and displayed chunks. We need a mutex because both our "add chunks" and "remove chunks" threads modify this array.
 var chunks = {} # Already loaded, just have to redraw
-var unready_chunks = {} # Currently being generated (i.e.) by a thread
-var chunks_loading_this_frame # Current system generates n chunks every frame b/c it's not threaded; This will be fixed in a future release
+var chunks_mutex = Mutex.new()
+
+# Chunks currently being generated. No mutex needed because only the "create chunks" thread modifies this.
+var unready_chunks = {}
+
+# Hacky way of doing stuff, I will reprogram this later
+var chunks_loading_this_frame
 
 # Dictionary we construct once at the beginning of the game that describes the exact order we iterate over the chunks near the player. This is more efficient and more maintainable than iterating through every one every frame. This also lets us do fancy stuff like starting halfway through because we know we generated everything before it already.
 # Potential Chunk Generation Optimizations:
@@ -89,7 +94,11 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
+
+	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
+	chunks_mutex.unlock()
+
 	unready_chunks.erase(chunk_key)
 	chunk_load_thread.wait_to_finish()
 
@@ -167,12 +176,15 @@ func load_closest_n_chunks(num_chunks_to_load):
 # See here: https://github.com/godotengine/godot/issues/9924
 func remove_far_chunks(_dummy_thread_arg):
 
-	# Note: You need to use chunks.values() here because if you use anything else Godot immediately gets out of the loop if you modify it during (from what I can tell)
-	for chunk in chunks.values():
-		var chunk_key = chunk.chunk_key
-		if chunk_key.distance_to(player_pos) > chunk_load_radius:
-			chunk.call_deferred("free") # .queue_free() works here too
-			chunks.erase(chunk_key)
+	if chunks_mutex.try_lock() == OK:
+		for chunk in chunks.values():
+			var chunk_key = chunk.chunk_key
+			if chunk_key.distance_to(player_pos) > chunk_load_radius:
+				chunk.call_deferred("free") # .queue_free() works here too
+				chunks.erase(chunk_key)
+		chunks_mutex.unlock()
+	else:
+		print("Couldn't remove chunks due to locked mutex!")
 	chunk_destroy_thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
