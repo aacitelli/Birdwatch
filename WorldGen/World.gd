@@ -107,7 +107,7 @@ func _process(_delta):
 	chunks_loading_this_frame = 0
 
 	# This value needs to scale with the chunks in a circle. A circle adds more chunks every ring, so a linear term isn't enough to stay caught up. However, if we let it go pure exponential without any sort of cap, this quickly gets REALLY laggy.
-	var chunks_per_frame = min(pow(chunk_load_radius, 1.1), 20)
+	var chunks_per_frame = min(pow(chunk_load_radius, 1), 10)
 	load_closest_n_chunks(chunks_per_frame)
 
 	# We only ever have chunks out of range the frame we move from one chunk to another
