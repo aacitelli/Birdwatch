@@ -83,11 +83,6 @@ func generate_chunk():
 	# The amount of width/depth that is in between each actual vertex. Basically a grid inside the main chunk grid, hence "subgrid"
 	var subgrid_unit_size = chunk_size / num_vertices_per_chunk
 
-	# Is it possible to make this loop take less time?
-	# I have to iterate through each gridbox. No way around that. So, at least O(wh) where w = width, h = height
-
-	# TODO: I don't need to calculate positioning and height more than once for each vertex. I currently do it four times per vertex (different for edges). I think I can construct a dictionary for these at the beginning, allowing for O(1) lookup time at a O(wd) up-front cost.
-
 	# TODO: This chunk shares edge vertices with other chunks. Don't do the noise calculation twice for these. (This can be done way down the road b/c the performance increase is small and it requires a little bit of work across Chunk instances)
 
 	# Construct a dictionary to hold vertex heights so we only have to calculate them once for each vertex rather than four times (for anything that isn't an edge) like we'd otherwise do below
@@ -105,7 +100,7 @@ func generate_chunk():
 		var local_z = 0
 		while local_z <= chunk_size:
 
-			# Get positions (including heights) of the cour corners
+			# Get positions (including heights) of the cour corners, and average heights of the triangles formed at them
 			var tl_height = vertex_heights[Vector2(local_x, local_z)]
 			var tr_height = vertex_heights[Vector2(local_x + subgrid_unit_size, local_z)]
 			var bl_height = vertex_heights[Vector2(local_x, local_z + subgrid_unit_size)]
@@ -114,8 +109,6 @@ func generate_chunk():
 			var tr_pos = Vector3(local_x + subgrid_unit_size, tr_height, local_z)
 			var bl_pos = Vector3(local_x, bl_height, local_z + subgrid_unit_size)
 			var br_pos = Vector3(local_x + subgrid_unit_size, br_height, local_z + subgrid_unit_size)
-
-			# Calculate the average height of each triangle
 			var tl_height_average = (tl_height + tr_height + bl_height) / 3.0
 			var tr_height_average = (tl_height + tr_height + br_height) / 3.0
 			var bl_height_average = (tl_height + bl_height + br_height) / 3.0
