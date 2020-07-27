@@ -94,13 +94,10 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
-
 	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
 	chunks_mutex.unlock()
-
 	unready_chunks.erase(chunk_key)
-	chunk_load_thread.wait_to_finish()
 
 # Retrieve chunk at specified coordinate
 func get_chunk(chunk_key):
