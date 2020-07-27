@@ -2,7 +2,7 @@ extends Spatial
 
 # Chunk-related constants
 const chunk_size = 4.0
-const chunk_load_radius = 16
+const chunk_load_radius = 8
 const num_vertices_per_chunk = 8.0
 
 # Height & Moisture Map Generation
@@ -16,12 +16,21 @@ var chunks = {} # Already loaded, just have to redraw
 var unready_chunks = {} # Currently being generated (i.e.) by a thread
 var chunks_loading_this_frame # Current system generates n chunks every frame b/c it's not threaded; This will be fixed in a future release
 
+# Dictionary we construct once at the beginning of the game that describes the exact order we iterate over the chunks near the player. This is more efficient and more maintainable than iterating through every one every frame. This also lets us do fancy stuff like starting halfway through because we know we generated everything before it already.
+# Potential Chunk Generation Optimizations:
+# - Reset a flag when we switch chunks. This signifies to start over searching again from the beginning. When we call generate_n_chunks every frame, we start from the last place we were, because we know we don't need the closer frames.
+var chunk_vertex_order = []
+var chunk_load_index
+var chunks_per_frame = min(pow(chunk_load_radius, 1), 10)
+var chunks_need_removed = false
+
 # Vector2 representing player grid position
 var player_pos
 
 # Thread used for terrain generation
 # Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
-var thread
+var chunk_load_thread
+var chunk_destroy_thread
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
@@ -47,24 +56,28 @@ func _ready():
 	moisture_map_noise.period = 220
 
 	# Thread used for terrain generation so we do it during main thread downtime
-	thread = Thread.new()
+	chunk_load_thread = Thread.new()
+	chunk_destroy_thread = Thread.new()
 
 	# Update our percentiles list on load time
 	generate_percentiles()
 
+	# Generate the order we generate chunks in (generated at runtime because chunk_load_radius can be changed at runtime)
+	generate_chunk_generation_order()
+
 func add_chunk(chunk_key):
 
 	# If this chunk has already been generated or is currently being generated, don't generate
+	# This is O(1) runtime because dictionaries are hash maps behind the scenes
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
 		return
 
 	# Wait until the thread is done to go ahead and do this
-	if thread.is_active():
-		thread.wait_to_finish()
+	if chunk_load_thread.is_active():
+		chunk_load_thread.wait_to_finish()
 	chunks_loading_this_frame += 1
 	unready_chunks[chunk_key] = 1
-	# print("Starting thread @ load_chunk " + str(chunk_key))
-	var _error = thread.start(self, "load_chunk", chunk_key)
+	var _error = chunk_load_thread.start(self, "load_chunk", chunk_key)
 
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
@@ -106,59 +119,51 @@ func _process(_delta):
 	# Terrain generation will go full steam until it hits another
 	chunks_loading_this_frame = 0
 
-	# This value needs to scale with the chunks in a circle. A circle adds more chunks every ring, so a linear term isn't enough to stay caught up. However, if we let it go pure exponential without any sort of cap, this quickly gets REALLY laggy.
-	var chunks_per_frame = min(pow(chunk_load_radius, 1), 10)
-	load_closest_n_chunks(chunks_per_frame)
-
 	# We only ever have chunks out of range the frame we move from one chunk to another
 	if changed_chunks_this_frame:
-		if thread.is_active():
-			thread.wait_to_finish()
-		var _error = thread.start(self, "remove_far_chunks", [])
+
+		# Reset generation from right on top of the player again
+		chunk_load_index = 0
+
+		# Signifies that we need to wait for the destroy thread to not be busy
+		chunks_need_removed = true
+
+	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
+	if chunks_need_removed:
+		if not chunk_destroy_thread.is_active():
+			var _error = chunk_destroy_thread.start(self, "remove_far_chunks", [])
+			chunks_need_removed = false
+
+	# Needs called after our check for chunk changes
+	load_closest_n_chunks(chunks_per_frame)
+
+# Generates an array of Vector2 like [(0, 0), (0, 1), (0, 2), (0, 3), etc.), all in relative chunks coordinates, and stores it in the chunk_vertex_order variable
+func generate_chunk_generation_order():
+
+	for current_radius in range(chunk_load_radius + 1):
+		if Vector2(current_radius, current_radius).length() <= chunk_load_radius:
+			chunk_vertex_order.append(Vector2(current_radius, current_radius)) # Top-Right Spot (Edge Case)
+		for i in range(1, 2 * current_radius + 1): # Right
+			if Vector2(current_radius, current_radius - i).length() <= chunk_load_radius:
+				chunk_vertex_order.append(Vector2(current_radius, current_radius - i))
+		for i in range(1, 2 * current_radius + 1): # Bottom
+			if Vector2(current_radius - i, -1 * current_radius).length() <= chunk_load_radius:
+				chunk_vertex_order.append(Vector2(current_radius - i, -1 * current_radius))
+		for i in range(1, 2 * current_radius + 1): # Left
+			if Vector2(-1 * current_radius, -1 * current_radius + i).length() <= chunk_load_radius:
+				chunk_vertex_order.append(Vector2(-1 * current_radius, -1 * current_radius + i))
+		for i in range(1, 2 * current_radius): # Top
+			if Vector2(-1 * current_radius + i, current_radius).length() <= chunk_load_radius:
+				chunk_vertex_order.append(Vector2(-1 * current_radius + i, current_radius))
 
 func load_closest_n_chunks(num_chunks_to_load):
 
-	# Basically select a spiral of grid coordinates around us until we get all the way to the outside.
-	# Call add_chunk on top right -> bottom right -> bottom left -> top left -> top right (exclusive) of each "ring"
-	var current_radius = 0
-	while current_radius < chunk_load_radius:
-
-		# Top-right spot; If we include this as part of the last loop there's a weird edge case at (0, 0) so this is separate
-		if Vector2(player_pos.x + current_radius, player_pos.y + current_radius).distance_to(player_pos) <= chunk_load_radius:
-			add_chunk(Vector2(player_pos.x + current_radius, player_pos.y + current_radius))
-			if chunks_loading_this_frame >= num_chunks_to_load:
-				return
-
-		# Down the right edge (not including the top-right corner, which is included in the last of these loops)
-		for i in range(1, 2 * current_radius + 1):
-			if Vector2(player_pos.x + current_radius, player_pos.y + current_radius - i).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(player_pos.x + current_radius, player_pos.y + current_radius - i))
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
-
-		# Left across the bottom edge
-		for i in range(1, 2 * current_radius + 1):
-			if Vector2(player_pos.x + current_radius - i, player_pos.y - current_radius).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(player_pos.x + current_radius - i, player_pos.y - current_radius))
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
-
-		# Up the left edge
-		for i in range(1, 2 * current_radius + 1):
-			if Vector2(player_pos.x - current_radius, player_pos.y - current_radius + i).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(player_pos.x - current_radius, player_pos.y - current_radius + i))
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
-
-		# Right across the top edge (excluding top-right)
-		for i in range(1, 2 * current_radius):
-			if Vector2(player_pos.x - current_radius + i, player_pos.y + current_radius).distance_to(player_pos) <= chunk_load_radius:
-				add_chunk(Vector2(player_pos.x - current_radius + i, player_pos.y + current_radius))
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
-
-		# Move on to the next ring of the "spiral"
-		current_radius += 1
+	# Start from the beginning. Once we get through them all, it'll skip this loop entirely.
+	while chunk_load_index < chunk_vertex_order.size():
+		add_chunk(Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y))
+		chunk_load_index += 1
+		if chunks_loading_this_frame >= num_chunks_to_load:
+			return
 
 # Removes any chunks deemed too far away from the scene
 # We don't actually use this argument; The Thread API doesn't let us call it otherwise though, for some reason

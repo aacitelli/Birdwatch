@@ -190,13 +190,6 @@ func generate_chunk():
 			local_z += subgrid_unit_size
 		local_x += subgrid_unit_size
 
-	# Materials for each biome
-	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
-	var beach_material = preload("res:///WorldGen/Biomes/BeachMaterial.tres")
-	var lowlands_material = preload("res:///WorldGen/Biomes/LowlandsMaterial.tres")
-	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
-	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
-
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_colors)
 	render_set_of_vertices_with_material(beach, beach_colors)
@@ -206,6 +199,14 @@ func generate_chunk():
 
 # TODO: These vector arrays are passed by value, *not* by reference; Can I modify this accordingly?
 func render_set_of_vertices_with_material(vertices: PoolVector3Array, colors: PoolColorArray):
+
+	# Edge case for if there were zero vertices contained in the chunk we tried to render
+	if vertices.size() == 0:
+		return
+
+	# Debug case for if we don't have a color for each vertex
+	if vertices.size() != colors.size():
+		print("render_set_of_vertices_with_material: vertices.size() != colors.size()!")
 
 	# Create mesh from arrays
 	var arr_mesh = ArrayMesh.new()
