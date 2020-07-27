@@ -178,7 +178,7 @@ func get_height(x, y, z):
 	noise *= scaling_factor # Scale so that mountains are near 100 height
 	if noise > MAX_HEIGHT:
 		print("Generated something above max height; Fix the noise function!")
-	return floor(noise)
+	return noise
 
 # Used to generate the percentiles (b/c normal generation scales BY the percentiles)
 func get_height_no_scaling(x, y, z):

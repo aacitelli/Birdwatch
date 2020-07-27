@@ -95,99 +95,57 @@ func generate_chunk():
 			var br_height_average = (tr_height + bl_height + br_height) / 3.0
 
 			# Always choose the triangle with the highest average and its complement
-			# Top-Left and Bottom-Right (drawn if either of the two is the max)
 			if tl_height_average >= tr_height_average and tl_height_average >= bl_height_average and tl_height_average >= br_height_average or br_height_average >= tl_height_average and br_height_average >= tr_height_average and br_height_average >= bl_height_average:
 
 				# Top-Left
 				if tl_height_average >= 0 and tl_height_average <= self.water_level:
-					ocean.append(tl_pos)
-					ocean.append(tr_pos)
-					ocean.append(bl_pos)
+					ocean.append_array([tl_pos, tr_pos, bl_pos])
 				elif tl_height_average > self.water_level and tl_height_average <= percentiles[30]:
-					beach.append(tl_pos)
-					beach.append(tr_pos)
-					beach.append(bl_pos)
+					beach.append_array([tl_pos, tr_pos, bl_pos])
 				elif tl_height_average > percentiles[30] and tl_height_average <= percentiles[65]:
-					lowlands.append(tl_pos)
-					lowlands.append(tr_pos)
-					lowlands.append(bl_pos)
+					lowlands.append_array([tl_pos, tr_pos, bl_pos])
 				elif tl_height_average > percentiles[65] and tl_height_average <= percentiles[85]:
-					highlands.append(tl_pos)
-					highlands.append(tr_pos)
-					highlands.append(bl_pos)
+					highlands.append_array([tl_pos, tr_pos, bl_pos])
 				else:
-					mountains.append(tl_pos)
-					mountains.append(tr_pos)
-					mountains.append(bl_pos)
+					mountains.append_array([tl_pos, tr_pos, bl_pos])
 
 				# Bottom-Right
 				if br_height_average >= 0 and br_height_average <= self.water_level:
-					ocean.append(br_pos)
-					ocean.append(bl_pos)
-					ocean.append(tr_pos)
+					ocean.append_array([br_pos, bl_pos, tr_pos])
 				elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
-					beach.append(br_pos)
-					beach.append(bl_pos)
-					beach.append(tr_pos)
+					beach.append_array([br_pos, bl_pos, tr_pos])
 				elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
-					lowlands.append(br_pos)
-					lowlands.append(bl_pos)
-					lowlands.append(tr_pos)
+					lowlands.append_array([br_pos, bl_pos, tr_pos])
 				elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
-					highlands.append(br_pos)
-					highlands.append(bl_pos)
-					highlands.append(tr_pos)
+					highlands.append_array([br_pos, bl_pos, tr_pos])
 				else:
-					mountains.append(br_pos)
-					mountains.append(bl_pos)
-					mountains.append(tr_pos)
+					mountains.append_array([br_pos, bl_pos, tr_pos])
 
-			# Top-Right and Bottom Left
 			else:
 
 				# Top-Right
 				if tr_height_average >= 0 and tr_height_average <= self.water_level:
-					ocean.append(tl_pos)
-					ocean.append(tr_pos)
-					ocean.append(br_pos)
+					ocean.append_array([tl_pos, tr_pos, br_pos])
 				elif tr_height_average > self.water_level and tr_height_average <= percentiles[30]:
-					beach.append(tl_pos)
-					beach.append(tr_pos)
-					beach.append(br_pos)
+					beach.append_array([tl_pos, tr_pos, br_pos])
 				elif tr_height_average > percentiles[30] and tr_height_average <= percentiles[65]:
-					lowlands.append(tl_pos)
-					lowlands.append(tr_pos)
-					lowlands.append(br_pos)
+					lowlands.append_array([tl_pos, tr_pos, br_pos])
 				elif tr_height_average > percentiles[65] and tr_height_average <= percentiles[85]:
-					highlands.append(tl_pos)
-					highlands.append(tr_pos)
-					highlands.append(br_pos)
+					highlands.append_array([tl_pos, tr_pos, br_pos])
 				else:
-					mountains.append(tl_pos)
-					mountains.append(tr_pos)
-					mountains.append(br_pos)
+					mountains.append_array([tl_pos, tr_pos, br_pos])
 
 				# Bottom-Left
 				if bl_height_average >= 0 and bl_height_average <= self.water_level:
-					ocean.append(br_pos)
-					ocean.append(bl_pos)
-					ocean.append(tl_pos)
+					ocean.append_array([br_pos, bl_pos, tl_pos])
 				elif bl_height_average > self.water_level and bl_height_average <= percentiles[30]:
-					beach.append(br_pos)
-					beach.append(bl_pos)
-					beach.append(tl_pos)
+					beach.append_array([br_pos, bl_pos, tl_pos])
 				elif bl_height_average > percentiles[30] and bl_height_average <= percentiles[65]:
-					lowlands.append(br_pos)
-					lowlands.append(bl_pos)
-					lowlands.append(tl_pos)
+					lowlands.append_array([br_pos, bl_pos, tl_pos])
 				elif bl_height_average > percentiles[65] and bl_height_average <= percentiles[85]:
-					highlands.append(br_pos)
-					highlands.append(bl_pos)
-					highlands.append(tl_pos)
+					highlands.append_array([br_pos, bl_pos, tl_pos])
 				else:
-					mountains.append(br_pos)
-					mountains.append(bl_pos)
-					mountains.append(tl_pos)
+					mountains.append_array([br_pos, bl_pos, tl_pos])
 
 			local_z += subgrid_unit_size
 		local_x += subgrid_unit_size
@@ -199,12 +157,6 @@ func generate_chunk():
 	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
 	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
 
-#	print("Ocean Vertices: " + str(ocean))
-#	print("Beach Vertices: " + str(beach))
-#	print("Lowlands Vertices: " + str(lowlands))
-#	print("Highlands Vertices: " + str(highlands))
-#	print("Mountains Vertices: " + str(mountains))
-
 	# Take each list of vertices through the function that'll draw them with the specified material
 	render_set_of_vertices_with_material(ocean, ocean_material)
 	render_set_of_vertices_with_material(beach, beach_material)
@@ -212,19 +164,18 @@ func generate_chunk():
 	render_set_of_vertices_with_material(highlands, highlands_material)
 	render_set_of_vertices_with_material(mountains, mountains_material)
 
-# Does exactly what it says it does, shockingly
+# TODO: These vector arrays are passed by value, *not* by reference; Can I modify this accordingly?
 func render_set_of_vertices_with_material(vertices, material):
 
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_material(material)
-
-	for vertex in vertices:
-		st.add_vertex(vertex)
+	var arr_mesh = ArrayMesh.new()
+	var arrays = []
+	arrays.resize(ArrayMesh.ARRAY_MAX)
+	arrays[ArrayMesh.ARRAY_VERTEX] = vertices
+	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = st.commit()
-	# mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
+	mesh_instance.mesh = arr_mesh
+	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
 	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't do shadows, fam
 	add_child(mesh_instance)
 

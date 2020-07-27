@@ -23,6 +23,7 @@ script = ExtResource( 1 )
 environment = SubResource( 2 )
 
 [node name="DirectionalLight" type="DirectionalLight" parent="WorldEnvironment"]
-transform = Transform( 0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 50, 0 )
+transform = Transform( 1, 0, 0, 0, -1.62921e-07, 1, 0, -1, -1.62921e-07, 0, 200, 0 )
+light_energy = 2.65
 
 [node name="World" parent="WorldEnvironment" instance=ExtResource( 2 )]
