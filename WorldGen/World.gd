@@ -91,6 +91,7 @@ func load_done(chunk):
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
 	chunks[chunk_key] = chunk
 	unready_chunks.erase(chunk_key)
+	chunk_load_thread.wait_to_finish()
 
 # Retrieve chunk at specified coordinate
 func get_chunk(chunk_key):
@@ -109,24 +110,20 @@ func _process(_delta):
 	# print("\n-----------------------\n")
 	# print("Process call #" + str(num_process_calls))
 
-	# Update player positioning values
+	# Resetting frame-specific counters
+	chunks_loading_this_frame = 0
+
+	# Update player positioning values and update whether we are in a new chunk this frame
 	var changed_chunks_this_frame = false
 	var new_player_pos = Vector2(floor($Player.translation.x / chunk_size), floor($Player.translation.z / chunk_size))
 	if new_player_pos != player_pos:
 		changed_chunks_this_frame = true
 	player_pos = new_player_pos
 
-	# Terrain generation will go full steam until it hits another
-	chunks_loading_this_frame = 0
-
-	# We only ever have chunks out of range the frame we move from one chunk to another
+	# Updating variables conditional on entering a new frame
 	if changed_chunks_this_frame:
-
-		# Reset generation from right on top of the player again
-		chunk_load_index = 0
-
-		# Signifies that we need to wait for the destroy thread to not be busy
-		chunks_need_removed = true
+		chunk_load_index = 0 # Start chunk gen right on top of player again
+		chunks_need_removed = true # Remove chunks as soon as removal thread isn't busy
 
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
@@ -176,6 +173,7 @@ func remove_far_chunks(_dummy_thread_arg):
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
 			chunk.call_deferred("free") # .queue_free() works here too
 			chunks.erase(chunk_key)
+	chunk_destroy_thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func get_height(x, y, z):
