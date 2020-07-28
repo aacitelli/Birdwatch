@@ -2,7 +2,7 @@ extends Spatial
 
 # Chunk-related constants
 const chunk_size = 4 # Has to be a float
-const chunk_load_radius = 8
+const chunk_load_radius = 16
 const num_vertices_per_chunk = 4 # Has to be a float
 
 # Height & Moisture Map Generation

@@ -112,108 +112,105 @@ func generate_chunk():
 				# Top-Left
 				if tl_height_average >= 0 and tl_height_average <= self.water_level:
 					ocean.append_array([tl_pos, tr_pos, bl_pos])
-					ocean_colors.append_array([color_black, color_black, color_black])
 				elif tl_height_average > self.water_level and tl_height_average <= percentiles[30]:
 					beach.append_array([tl_pos, tr_pos, bl_pos])
-					beach_colors.append_array([color_dark_gray, color_dark_gray, color_dark_gray])
 				elif tl_height_average > percentiles[30] and tl_height_average <= percentiles[65]:
 					lowlands.append_array([tl_pos, tr_pos, bl_pos])
-					lowlands_colors.append_array([color_gray, color_gray, color_gray])
 				elif tl_height_average > percentiles[65] and tl_height_average <= percentiles[85]:
 					highlands.append_array([tl_pos, tr_pos, bl_pos])
-					highlands_colors.append_array([color_light_gray, color_light_gray, color_light_gray])
 				else:
 					mountains.append_array([tl_pos, tr_pos, bl_pos])
-					mountains_colors.append_array([color_white, color_white, color_white])
 
 				# Bottom-Right
 				if br_height_average >= 0 and br_height_average <= self.water_level:
 					ocean.append_array([br_pos, bl_pos, tr_pos])
-					ocean_colors.append_array([color_black, color_black, color_black])
 				elif br_height_average > self.water_level and br_height_average <= percentiles[30]:
 					beach.append_array([br_pos, bl_pos, tr_pos])
-					beach_colors.append_array([color_dark_gray, color_dark_gray, color_dark_gray])
 				elif br_height_average > percentiles[30] and br_height_average <= percentiles[65]:
 					lowlands.append_array([br_pos, bl_pos, tr_pos])
-					lowlands_colors.append_array([color_gray, color_gray, color_gray])
 				elif br_height_average > percentiles[65] and br_height_average <= percentiles[85]:
 					highlands.append_array([br_pos, bl_pos, tr_pos])
-					highlands_colors.append_array([color_light_gray, color_light_gray, color_light_gray])
 				else:
 					mountains.append_array([br_pos, bl_pos, tr_pos])
-					mountains_colors.append_array([color_white, color_white, color_white])
 
 			else:
 
 				# Top-Right
 				if tr_height_average >= 0 and tr_height_average <= self.water_level:
 					ocean.append_array([tl_pos, tr_pos, br_pos])
-					ocean_colors.append_array([color_black, color_black, color_black])
 				elif tr_height_average > self.water_level and tr_height_average <= percentiles[30]:
 					beach.append_array([tl_pos, tr_pos, br_pos])
-					beach_colors.append_array([color_dark_gray, color_dark_gray, color_dark_gray])
 				elif tr_height_average > percentiles[30] and tr_height_average <= percentiles[65]:
 					lowlands.append_array([tl_pos, tr_pos, br_pos])
-					lowlands_colors.append_array([color_gray, color_gray, color_gray])
 				elif tr_height_average > percentiles[65] and tr_height_average <= percentiles[85]:
 					highlands.append_array([tl_pos, tr_pos, br_pos])
-					highlands_colors.append_array([color_light_gray, color_light_gray, color_light_gray])
 				else:
 					mountains.append_array([tl_pos, tr_pos, br_pos])
-					mountains_colors.append_array([color_white, color_white, color_white])
 
 				# Bottom-Left
 				if bl_height_average >= 0 and bl_height_average <= self.water_level:
 					ocean.append_array([br_pos, bl_pos, tl_pos])
-					ocean_colors.append_array([color_black, color_black, color_black])
 				elif bl_height_average > self.water_level and bl_height_average <= percentiles[30]:
 					beach.append_array([br_pos, bl_pos, tl_pos])
-					beach_colors.append_array([color_dark_gray, color_dark_gray, color_dark_gray])
 				elif bl_height_average > percentiles[30] and bl_height_average <= percentiles[65]:
 					lowlands.append_array([br_pos, bl_pos, tl_pos])
-					lowlands_colors.append_array([color_gray, color_gray, color_gray])
 				elif bl_height_average > percentiles[65] and bl_height_average <= percentiles[85]:
 					highlands.append_array([br_pos, bl_pos, tl_pos])
-					highlands_colors.append_array([color_light_gray, color_light_gray, color_light_gray])
 				else:
 					mountains.append_array([br_pos, bl_pos, tl_pos])
-					mountains_colors.append_array([color_white, color_white, color_white])
 
 			local_z += subgrid_unit_size
 		local_x += subgrid_unit_size
 
+	var ocean_material = preload("res:///WorldGen/Biomes/OceanMaterial.tres")
+	var beach_material = preload("res:///WorldGen/Biomes/BeachMaterial.tres")
+	var lowlands_material = preload("res:///WorldGen/Biomes/LowlandsMaterial.tres")
+	var highlands_material = preload("res:///WorldGen/Biomes/HighlandsMaterial.tres")
+	var mountains_material = preload("res:///WorldGen/Biomes/MountainsMaterial.tres")
+
 	# Take each list of vertices through the function that'll draw them with the specified material
-	render_set_of_vertices_with_material(ocean, ocean_colors)
-	render_set_of_vertices_with_material(beach, beach_colors)
-	render_set_of_vertices_with_material(lowlands, lowlands_colors)
-	render_set_of_vertices_with_material(highlands, highlands_colors)
-	render_set_of_vertices_with_material(mountains, mountains_colors)
+	render_set_of_vertices_with_material(ocean, ocean_material)
+	render_set_of_vertices_with_material(beach, beach_material)
+	render_set_of_vertices_with_material(lowlands, lowlands_material)
+	render_set_of_vertices_with_material(highlands, highlands_material)
+	render_set_of_vertices_with_material(mountains, mountains_material)
 
 # TODO: These vector arrays are passed by value, *not* by reference; Can I modify this accordingly?
-func render_set_of_vertices_with_material(vertices: PoolVector3Array, colors: PoolColorArray):
+func render_set_of_vertices_with_material(vertices: PoolVector3Array, material: SpatialMaterial) -> void:
 
 	# Edge case for if there were zero vertices contained in the chunk we tried to render
 	if vertices.size() == 0:
 		return
 
-	# Debug case for if we don't have a color for each vertex
-	if vertices.size() != colors.size():
-		print("render_set_of_vertices_with_material: vertices.size() != colors.size()!")
+	# Iterate through each triplet, making a MeshInstance out of each and rendering it
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(material)
 
-	# Create mesh from arrays
-	var arr_mesh = ArrayMesh.new()
-	var arrays = []
-	arrays.resize(ArrayMesh.ARRAY_MAX)
-	arrays[ArrayMesh.ARRAY_VERTEX] = vertices
-	arrays[ArrayMesh.ARRAY_COLOR] = colors
-	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	# TODO: SurfaceTool isn't that inefficient, but it means the entire biome essentially looks the same.
+	for vertex in vertices:
+		st.add_vertex(vertex)
 
-	# Apply mesh to scene tree as a MeshInstance
 	var mesh_instance = MeshInstance.new()
-	mesh_instance.mesh = arr_mesh
-	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
-	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't cast shadows
+	mesh_instance.mesh = st.commit()
+	mesh_instance.create_trimesh_collision()
+	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF
 	add_child(mesh_instance)
+
+#	# Create mesh from arrays
+#	var arr_mesh = ArrayMesh.new()
+#	var arrays = []
+#	arrays.resize(ArrayMesh.ARRAY_MAX)
+#	arrays[ArrayMesh.ARRAY_VERTEX] = vertices
+#	arrays[ArrayMesh.ARRAY_COLOR] = colors
+#	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+#
+#	# Apply mesh to scene tree as a MeshInstance
+#	var mesh_instance = MeshInstance.new()
+#	mesh_instance.mesh = arr_mesh
+#	mesh_instance.create_trimesh_collision() # Literally just adds collision ezpz
+#	mesh_instance.cast_shadow = GeometryInstance.SHADOW_CASTING_SETTING_OFF # Don't cast shadows
+#	add_child(mesh_instance)
 
 func generate_water():
 	var plane_mesh = PlaneMesh.new()
