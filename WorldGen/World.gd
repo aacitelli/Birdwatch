@@ -1,7 +1,7 @@
 extends Spatial
 
 # Chunk-related constants
-const chunk_size = 4 # Has to be a float
+const chunk_size = 16 # Has to be a float
 const chunk_load_radius = 16
 const num_vertices_per_chunk = 4 # Has to be a float
 
@@ -13,7 +13,6 @@ var MAX_HEIGHT = 100
 
 # Our record of the currently loaded and displayed chunks. We need a mutex because both our "add chunks" and "remove chunks" threads modify this array.
 var chunks = {} # Already loaded, just have to redraw
-var chunks_mutex = Mutex.new()
 
 # Chunks currently being generated. No mutex needed because only the "create chunks" thread modifies this.
 var unready_chunks = {}
@@ -34,8 +33,10 @@ var player_pos
 
 # Thread used for terrain generation
 # Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
-var chunk_load_thread
-var chunk_destroy_thread
+var load_thread_0
+var load_thread_1
+var current_load_thread
+var destroy_thread
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
@@ -61,8 +62,10 @@ func _ready():
 	moisture_map_noise.period = 220
 
 	# Thread used for terrain generation so we do it during main thread downtime
-	chunk_load_thread = Thread.new()
-	chunk_destroy_thread = Thread.new()
+	load_thread_0 = Thread.new()
+	load_thread_1 = Thread.new()
+	destroy_thread = Thread.new()
+	current_load_thread = 0
 
 	# Update our percentiles list on load time
 	generate_percentiles()
@@ -70,19 +73,26 @@ func _ready():
 	# Generate the order we generate chunks in (generated at runtime because chunk_load_radius can be changed at runtime)
 	generate_chunk_generation_order()
 
+# If thread_index is even, we're on the 0th thread
 func add_chunk(chunk_key):
 
 	# If this chunk has already been generated or is currently being generated, don't generate
 	# This is O(1) runtime because dictionaries are hash maps behind the scenes
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
+
 		return
 
-	# Wait until the thread is done to go ahead and do this
-	if chunk_load_thread.is_active():
-		chunk_load_thread.wait_to_finish()
-	chunks_loading_this_frame += 1
-	unready_chunks[chunk_key] = 1
-	var _error = chunk_load_thread.start(self, "load_chunk", chunk_key)
+	# IMPORTANT: By convention, I never call this function unless I have verified right before the call that one of the threads is open.
+	if current_load_thread % 2 == 0:
+		current_load_thread += 1
+		chunks_loading_this_frame += 1
+		unready_chunks[chunk_key] = 1
+		var _error = load_thread_0.start(self, "load_chunk", chunk_key)
+	else:
+		current_load_thread += 1
+		chunks_loading_this_frame += 1
+		unready_chunks[chunk_key] = 1
+		var _error = load_thread_1.start(self, "load_chunk", chunk_key)
 
 # Initialize chunk and add it to the tree when we get idle time
 func load_chunk(chunk_key):
@@ -94,9 +104,7 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
-	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
-	chunks_mutex.unlock()
 	unready_chunks.erase(chunk_key)
 
 # Retrieve chunk at specified coordinate
@@ -133,8 +141,8 @@ func _process(_delta):
 
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
-		if not chunk_destroy_thread.is_active():
-			var _error = chunk_destroy_thread.start(self, "remove_far_chunks", [])
+		if not destroy_thread.is_active():
+			var _error = destroy_thread.start(self, "remove_far_chunks", [])
 			chunks_need_removed = false
 
 	# Needs called after our check for chunk changes
@@ -162,7 +170,18 @@ func generate_chunk_generation_order():
 func load_closest_n_chunks(num_chunks_to_load):
 
 	# Start from the beginning. Once we get through them all, it'll skip this loop entirely.
+
+	# TODO: I'm writing this to alternate threads. Make it dynamically use threads as they open up, because doing it my way introduces some wait time.
+	# TODO: Not optimal whenever odd chunks already exist and all the even chunks need actually added.
+	var current_thread = 0
 	while chunk_load_index < chunk_vertex_order.size():
+
+		# Wait for whichever thread we are using for this call to be done
+		if current_load_thread % 2 == 0:
+			load_thread_0.wait_to_finish()
+		else:
+			load_thread_1.wait_to_finish()
+
 		add_chunk(Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y))
 		chunk_load_index += 1
 		if chunks_loading_this_frame >= num_chunks_to_load:
@@ -173,16 +192,12 @@ func load_closest_n_chunks(num_chunks_to_load):
 # See here: https://github.com/godotengine/godot/issues/9924
 func remove_far_chunks(_dummy_thread_arg):
 
-	if chunks_mutex.try_lock() == OK:
-		for chunk in chunks.values():
-			var chunk_key = chunk.chunk_key
-			if chunk_key.distance_to(player_pos) > chunk_load_radius:
-				chunk.call_deferred("free") # .queue_free() works here too
-				chunks.erase(chunk_key)
-		chunks_mutex.unlock()
-	else:
-		print("Couldn't remove chunks due to locked mutex!")
-	chunk_destroy_thread.wait_to_finish()
+	for chunk in chunks.values():
+		var chunk_key = chunk.chunk_key
+		if chunk_key.distance_to(player_pos) > chunk_load_radius:
+			chunks.erase(chunk_key)
+			chunk.call_deferred("free") # .queue_free() works here too
+	destroy_thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func get_height(x, y, z):
