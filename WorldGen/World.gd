@@ -13,6 +13,7 @@ var MAX_HEIGHT = 100
 
 # Our record of the currently loaded and displayed chunks. We need a mutex because both our "add chunks" and "remove chunks" threads modify this array.
 var chunks = {} # Already loaded, just have to redraw
+var chunks_mutex
 
 # Chunks currently being generated. No mutex needed because only the "create chunks" thread modifies this.
 var unready_chunks = {}
@@ -65,6 +66,7 @@ func _ready():
 	load_thread_0 = Thread.new()
 	load_thread_1 = Thread.new()
 	destroy_thread = Thread.new()
+	chunks_mutex = Mutex.new()
 	current_load_thread = 0
 
 	# Update our percentiles list on load time
@@ -104,7 +106,9 @@ func load_chunk(chunk_key):
 func load_done(chunk):
 	add_child(chunk)
 	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
+	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
+	chunks_mutex.unlock()
 	unready_chunks.erase(chunk_key)
 
 # Retrieve chunk at specified coordinate
