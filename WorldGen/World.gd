@@ -34,8 +34,8 @@ var player_pos
 
 # Thread used for terrain generation
 # Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
-var load_thread_0
-var load_thread_1
+var load_threads
+var num_load_threads
 var current_load_thread
 var destroy_thread
 
@@ -62,9 +62,12 @@ func _ready():
 	moisture_map_noise.octaves = 4
 	moisture_map_noise.period = 220
 
-	# Thread used for terrain generation so we do it during main thread downtime
-	load_thread_0 = Thread.new()
-	load_thread_1 = Thread.new()
+	# Threads used for terrain generation and destruction
+	load_threads = []
+	num_load_threads = 2
+	load_threads.resize(num_load_threads)
+	for i in range(num_load_threads):
+		load_threads[i] = Thread.new()
 	destroy_thread = Thread.new()
 	chunks_mutex = Mutex.new()
 	current_load_thread = 0
@@ -76,30 +79,24 @@ func _ready():
 	generate_chunk_generation_order()
 
 # If thread_index is even, we're on the 0th thread
-func add_chunk(chunk_key):
+func add_chunk(thread, chunk_key):
 
-	# If this chunk has already been generated or is currently being generated, don't generate
-	# This is O(1) runtime because dictionaries are hash maps behind the scenes
+	print("add_chunk called on chunk " + str(chunk_key))
+
+	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
+	# This is O(1) b/c hash tables, I'm not going to try and optimize this function to 100% only be called on new chunks (though it's optimized to not start over from the middle until we move over a chunk)
+	# TODO: We can optimize radial loading more by storing how far the previous chunk got in terms of radius away and starting (there - 1) because we only ever move one chunk. May be buggy if the player ever moves more than one chunk in a frame, but I don't think that's something I have to worry about.
 	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
-
+		thread.wait_to_finish()
 		return
 
-	# IMPORTANT: By convention, I never call this function unless I have verified right before the call that one of the threads is open.
-	if current_load_thread % 2 == 0:
-		current_load_thread += 1
-		chunks_loading_this_frame += 1
-		unready_chunks[chunk_key] = 1
-		var _error = load_thread_0.start(self, "load_chunk", chunk_key)
-	else:
-		current_load_thread += 1
-		chunks_loading_this_frame += 1
-		unready_chunks[chunk_key] = 1
-		var _error = load_thread_1.start(self, "load_chunk", chunk_key)
-
-# Initialize chunk and add it to the tree when we get idle time
-func load_chunk(chunk_key):
+	chunks_loading_this_frame += 1
+	unready_chunks[chunk_key] = 1
 	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
 	chunk.translation = Vector3(chunk.x, 0, chunk.z)
+	thread.wait_to_finish()
+
+	# Wait until a time where it is safe in order to add the chunk itself to the tree
 	call_deferred("load_done", chunk)
 
 # Add chunk to tree and move chunk from unready chunks to ready chunks
@@ -125,8 +122,6 @@ var num_process_calls = 0
 func _process(_delta):
 
 	num_process_calls += 1
-	# print("\n-----------------------\n")
-	# print("Process call #" + str(num_process_calls))
 
 	# Resetting frame-specific counters
 	chunks_loading_this_frame = 0
@@ -146,11 +141,14 @@ func _process(_delta):
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
 		if not destroy_thread.is_active():
-			var _error = destroy_thread.start(self, "remove_far_chunks", [])
+			var _error = destroy_thread.start(self, "remove_far_chunks", destroy_thread)
 			chunks_need_removed = false
+
+			# So they aren't in the chunks array... but still exist in the scene tree.
 
 	# Needs called after our check for chunk changes
 	load_closest_n_chunks(chunks_per_frame)
+
 
 # Generates an array of Vector2 like [(0, 0), (0, 1), (0, 2), (0, 3), etc.), all in relative chunks coordinates, and stores it in the chunk_vertex_order variable
 func generate_chunk_generation_order():
@@ -179,29 +177,28 @@ func load_closest_n_chunks(num_chunks_to_load):
 	# TODO: Not optimal whenever odd chunks already exist and all the even chunks need actually added.
 	var current_thread = 0
 	while chunk_load_index < chunk_vertex_order.size():
-
-		# Wait for whichever thread we are using for this call to be done
-		if current_load_thread % 2 == 0:
-			load_thread_0.wait_to_finish()
-		else:
-			load_thread_1.wait_to_finish()
-
-		add_chunk(Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y))
-		chunk_load_index += 1
-		if chunks_loading_this_frame >= num_chunks_to_load:
-			return
+		print("We haven't yet hit our \"number of chunks to load\" quota.")
+		for thread in load_threads:
+			print("Checking thread: " + str(thread))
+			if not thread.is_active():
+				print("Thread wasn't active. Starting on an add_chunk call.")
+				var _error = thread.start(self, "add_chunk", [thread, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
+				chunk_load_index += 1
+				if chunks_loading_this_frame >= num_chunks_to_load:
+					return
 
 # Removes any chunks deemed too far away from the scene
 # We don't actually use this argument; The Thread API doesn't let us call it otherwise though, for some reason
 # See here: https://github.com/godotengine/godot/issues/9924
-func remove_far_chunks(_dummy_thread_arg):
-
+func remove_far_chunks(thread):
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
+			chunks_mutex.lock()
 			chunks.erase(chunk_key)
+			chunks_mutex.unlock()
 			chunk.call_deferred("free") # .queue_free() works here too
-	destroy_thread.wait_to_finish()
+	thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func get_height(x, y, z):
