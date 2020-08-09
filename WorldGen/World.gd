@@ -38,6 +38,7 @@ var load_threads
 var num_load_threads
 var current_load_thread
 var destroy_thread
+signal load_thread_done
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
@@ -77,43 +78,9 @@ func _ready():
 
 	# Generate the order we generate chunks in (generated at runtime because chunk_load_radius can be changed at runtime)
 	generate_chunk_generation_order()
+	chunk_load_index = 0
 
-# If thread_index is even, we're on the 0th thread
-func add_chunk(thread, chunk_key):
-
-	print("add_chunk called on chunk " + str(chunk_key))
-
-	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
-	# This is O(1) b/c hash tables, I'm not going to try and optimize this function to 100% only be called on new chunks (though it's optimized to not start over from the middle until we move over a chunk)
-	# TODO: We can optimize radial loading more by storing how far the previous chunk got in terms of radius away and starting (there - 1) because we only ever move one chunk. May be buggy if the player ever moves more than one chunk in a frame, but I don't think that's something I have to worry about.
-	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
-		thread.wait_to_finish()
-		return
-
-	chunks_loading_this_frame += 1
-	unready_chunks[chunk_key] = 1
-	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
-	chunk.translation = Vector3(chunk.x, 0, chunk.z)
-	thread.wait_to_finish()
-
-	# Wait until a time where it is safe in order to add the chunk itself to the tree
-	call_deferred("load_done", chunk)
-
-# Add chunk to tree and move chunk from unready chunks to ready chunks
-func load_done(chunk):
-	add_child(chunk)
-	var chunk_key = Vector2(chunk.x / chunk_size, chunk.z / chunk_size)
-	chunks_mutex.lock()
-	chunks[chunk_key] = chunk
-	chunks_mutex.unlock()
-	unready_chunks.erase(chunk_key)
-
-# Retrieve chunk at specified coordinate
-func get_chunk(chunk_key):
-	if chunks.has(chunk_key):
-		return chunks.get(chunk_key)
-	else:
-		return null
+	print("Made it to end of _ready()")
 
 # Tracks frames processed. Used to conditionally run certain things that run regularly, but don't need to run every frame.
 var num_process_calls = 0
@@ -149,6 +116,44 @@ func _process(_delta):
 	# Needs called after our check for chunk changes
 	load_closest_n_chunks(chunks_per_frame)
 
+# If thread_index is even, we're on the 0th thread
+func add_chunk(args_arr):
+	var thread = args_arr[0]
+	var chunk_key = args_arr[1]
+	print("add_chunk called on chunk " + str(chunk_key))
+
+	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
+	# This is O(1) b/c hash tables, I'm not going to try and optimize this function to 100% only be called on new chunks (though it's optimized to not start over from the middle until we move over a chunk)
+	# TODO: We can optimize radial loading more by storing how far the previous chunk got in terms of radius away and starting (there - 1) because we only ever move one chunk. May be buggy if the player ever moves more than one chunk in a frame, but I don't think that's something I have to worry about.
+	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
+		thread.wait_to_finish()
+		return
+
+	chunks_loading_this_frame += 1
+	unready_chunks[chunk_key] = 1
+	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
+	chunk.translation = Vector3(chunk.x, 0, chunk.z)
+
+	add_child(chunk)
+	chunks_mutex.lock()
+	chunks[chunk_key] = chunk
+	chunks_mutex.unlock()
+	unready_chunks.erase(chunk_key)
+
+	# Queue the chunk getting added to the scene tree whenever a thread-safe time gets here
+	call_deferred("load_done", thread)
+
+# Add chunk to tree and move chunk from unready chunks to ready chunks
+func load_done(thread):
+	emit_signal("load_thread_done")
+	thread.wait_to_finish()
+
+# Retrieve chunk at specified coordinate
+func get_chunk(chunk_key):
+	if chunks.has(chunk_key):
+		return chunks.get(chunk_key)
+	else:
+		return null
 
 # Generates an array of Vector2 like [(0, 0), (0, 1), (0, 2), (0, 3), etc.), all in relative chunks coordinates, and stores it in the chunk_vertex_order variable
 func generate_chunk_generation_order():
@@ -175,7 +180,6 @@ func load_closest_n_chunks(num_chunks_to_load):
 
 	# TODO: I'm writing this to alternate threads. Make it dynamically use threads as they open up, because doing it my way introduces some wait time.
 	# TODO: Not optimal whenever odd chunks already exist and all the even chunks need actually added.
-	var current_thread = 0
 	while chunk_load_index < chunk_vertex_order.size():
 		print("We haven't yet hit our \"number of chunks to load\" quota.")
 		for thread in load_threads:
@@ -186,6 +190,9 @@ func load_closest_n_chunks(num_chunks_to_load):
 				chunk_load_index += 1
 				if chunks_loading_this_frame >= num_chunks_to_load:
 					return
+
+		# Take work off of the main thread until one of the threads is finished.
+		yield(self, "load_thread_done")
 
 # Removes any chunks deemed too far away from the scene
 # We don't actually use this argument; The Thread API doesn't let us call it otherwise though, for some reason
