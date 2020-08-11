@@ -2,7 +2,7 @@ extends Spatial
 
 # Chunk-related constants
 const chunk_size = 16 # Has to be a float
-const chunk_load_radius = 16
+const chunk_load_radius = 4
 const num_vertices_per_chunk = 4 # Has to be a float
 
 # Height & Moisture Map Generation
@@ -14,9 +14,6 @@ var MAX_HEIGHT = 100
 # Our record of the currently loaded and displayed chunks. We need a mutex because both our "add chunks" and "remove chunks" threads modify this array.
 var chunks = {} # Already loaded, just have to redraw
 var chunks_mutex
-
-# Chunks currently being generated. No mutex needed because only the "create chunks" thread modifies this.
-var unready_chunks = {}
 
 # Hacky way of doing stuff, I will reprogram this later
 var chunks_loading_this_frame
@@ -34,11 +31,13 @@ var player_pos
 
 # Thread used for terrain generation
 # Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
-var load_threads
-var num_load_threads
-var current_load_thread
+var load_thread_one
+var load_thread_two
+var load_thread_one_done
+var load_thread_two_done
+signal load_thread_open
 var destroy_thread
-signal load_thread_done
+var currently_generating_chunks
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
 
@@ -63,24 +62,19 @@ func _ready():
 	moisture_map_noise.octaves = 4
 	moisture_map_noise.period = 220
 
-	# Threads used for terrain generation and destruction
-	load_threads = []
-	num_load_threads = 2
-	load_threads.resize(num_load_threads)
-	for i in range(num_load_threads):
-		load_threads[i] = Thread.new()
+	# Set up both load threads and destroy thread (and a mutex for the *small* amount of data they share)
+	load_thread_one = Thread.new()
+	load_thread_one_done = true
+	load_thread_two = Thread.new()
+	load_thread_two_done = true
 	destroy_thread = Thread.new()
 	chunks_mutex = Mutex.new()
-	current_load_thread = 0
 
 	# Update our percentiles list on load time
 	generate_percentiles()
-
-	# Generate the order we generate chunks in (generated at runtime because chunk_load_radius can be changed at runtime)
 	generate_chunk_generation_order()
+	currently_generating_chunks = false
 	chunk_load_index = 0
-
-	print("Made it to end of _ready()")
 
 # Tracks frames processed. Used to conditionally run certain things that run regularly, but don't need to run every frame.
 var num_process_calls = 0
@@ -109,44 +103,54 @@ func _process(_delta):
 	if chunks_need_removed:
 		if not destroy_thread.is_active():
 			var _error = destroy_thread.start(self, "remove_far_chunks", destroy_thread)
-			chunks_need_removed = false
-
-			# So they aren't in the chunks array... but still exist in the scene tree.
+			destroy_thread.wait_to_finish()
 
 	# Needs called after our check for chunk changes
-	load_closest_n_chunks(chunks_per_frame)
+	if not currently_generating_chunks:
+		load_chunks_to_radius()
 
-# If thread_index is even, we're on the 0th thread
-func add_chunk(args_arr):
-	var thread = args_arr[0]
+func generate_chunk(args_arr):
+
+	# This is a thread function, meaning to pass in more than one parameter we have to pass one array in.
+	var thread_number = args_arr[0]
 	var chunk_key = args_arr[1]
-	print("add_chunk called on chunk " + str(chunk_key))
+	print("generate_chunk called on chunk " + str(chunk_key) + " with thread number " + str(thread_number))
+
+	if thread_number == 1:
+		load_thread_one_done = false
+	else:
+		load_thread_two_done = false
 
 	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
-	# This is O(1) b/c hash tables, I'm not going to try and optimize this function to 100% only be called on new chunks (though it's optimized to not start over from the middle until we move over a chunk)
-	# TODO: We can optimize radial loading more by storing how far the previous chunk got in terms of radius away and starting (there - 1) because we only ever move one chunk. May be buggy if the player ever moves more than one chunk in a frame, but I don't think that's something I have to worry about.
-	if chunks.has(chunk_key) or unready_chunks.has(chunk_key):
-		thread.wait_to_finish()
+	if chunks.has(chunk_key):
+		call_deferred("load_thread_done", thread_number)
 		return
 
-	chunks_loading_this_frame += 1
-	unready_chunks[chunk_key] = 1
+	# Actually generate the chunk
 	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
 	chunk.translation = Vector3(chunk.x, 0, chunk.z)
-
-	add_child(chunk)
 	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
 	chunks_mutex.unlock()
-	unready_chunks.erase(chunk_key)
+	add_child(chunk)
 
-	# Queue the chunk getting added to the scene tree whenever a thread-safe time gets here
-	call_deferred("load_done", thread)
+	# Queue adding to scene tree, then end the thread
+	call_deferred("load_thread_done", thread_number)
 
-# Add chunk to tree and move chunk from unready chunks to ready chunks
-func load_done(thread):
-	emit_signal("load_thread_done")
-	thread.wait_to_finish()
+# Add chunk to tree and rejoin main thread
+func load_thread_done(thread_number):
+
+	# Rejoin that thread with the main thread and send out the relevant signals
+	if thread_number == 1:
+		load_thread_one.wait_to_finish()
+		load_thread_one_done = true
+	else:
+		load_thread_two.wait_to_finish()
+		load_thread_two_done = true
+
+	# Returns execution back to the chunk loading thread, which then
+	# uses the booleans assigned above to decide on a thread to start the next chunk on
+	emit_signal("load_thread_open")
 
 # Retrieve chunk at specified coordinate
 func get_chunk(chunk_key):
@@ -174,29 +178,46 @@ func generate_chunk_generation_order():
 			if Vector2(-1 * current_radius + i, current_radius).length() <= chunk_load_radius:
 				chunk_vertex_order.append(Vector2(-1 * current_radius + i, current_radius))
 
-func load_closest_n_chunks(num_chunks_to_load):
+# TODO: Might have weird edge cases if both threads are open during this in cases near when we're fully loaded
+func load_chunks_to_radius():
 
-	# Start from the beginning. Once we get through them all, it'll skip this loop entirely.
+	# As most of the work here happens off the main thread, this blocks more calls to this function from process()
+	currently_generating_chunks = true
 
-	# TODO: I'm writing this to alternate threads. Make it dynamically use threads as they open up, because doing it my way introduces some wait time.
-	# TODO: Not optimal whenever odd chunks already exist and all the even chunks need actually added.
+	# I want to be able to continually
 	while chunk_load_index < chunk_vertex_order.size():
-		print("We haven't yet hit our \"number of chunks to load\" quota.")
-		for thread in load_threads:
-			print("Checking thread: " + str(thread))
-			if not thread.is_active():
-				print("Thread wasn't active. Starting on an add_chunk call.")
-				var _error = thread.start(self, "add_chunk", [thread, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
-				chunk_load_index += 1
-				if chunks_loading_this_frame >= num_chunks_to_load:
-					return
 
-		# Take work off of the main thread until one of the threads is finished.
-		yield(self, "load_thread_done")
+		# Thread 1
+		if load_thread_one_done:
+
+			# Debug
+			if load_thread_one.is_active():
+				print("Tried to call generate_chunk on thread one when it was busy generating something else!")
+
+			# Generate a chunk using this thread
+			load_thread_one_done = false
+			var _error = load_thread_one.start(self, "generate_chunk", [1, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
+			chunk_load_index += 1
+
+		# Thread 2
+		if load_thread_two_done and chunk_load_index < chunk_vertex_order.size():
+
+			# Debug
+			if load_thread_two.is_active():
+				print("Tried to call generate_chunk on thread two when it was busy generating something else!")
+
+			# Generate a chunk using this thread
+			load_thread_two_done = false
+			var _error = load_thread_two.start(self, "generate_chunk", [2, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
+			chunk_load_index += 1
+
+		# This signal is emitted whenever either thread is done. We also change a variable to signify which of them is done.
+		yield(self, "load_thread_open")
+
+	# Signify to the main thread that we can call this again
+	currently_generating_chunks = false
 
 # Removes any chunks deemed too far away from the scene
-# We don't actually use this argument; The Thread API doesn't let us call it otherwise though, for some reason
-# See here: https://github.com/godotengine/godot/issues/9924
 func remove_far_chunks(thread):
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
@@ -204,7 +225,10 @@ func remove_far_chunks(thread):
 			chunks_mutex.lock()
 			chunks.erase(chunk_key)
 			chunks_mutex.unlock()
-			chunk.call_deferred("free") # .queue_free() works here too
+			chunk.queue_free() # chunk.call_deferred("free")
+	call_deferred("thread_done")
+
+func thread_done(thread):
 	thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
