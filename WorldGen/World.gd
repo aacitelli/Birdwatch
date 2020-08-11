@@ -102,9 +102,12 @@ func _process(_delta):
 
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
+		print("Chunks need removed.")
 		if not destroy_thread.is_active():
 			print("Starting remove_far_chunks.")
 			var _error = destroy_thread.start(self, "remove_far_chunks", destroy_thread)
+		else:
+			print("Destroy thread was busy!")
 
 	# Needs called after our check for chunk changes
 	if not currently_generating_chunks:
@@ -175,9 +178,9 @@ func load_chunks_to_radius():
 	# I want to be able to continually
 	while chunk_load_index < chunk_vertex_order.size():
 
-		print("Iteration.")
-		print("Thread 1 Active: " + str(load_thread_one.is_active()))
-		print("Thread 2 Active: " + str(load_thread_two.is_active()))
+		# print("Iteration.")
+		# print("Thread 1 Active: " + str(load_thread_one.is_active()))
+		# print("Thread 2 Active: " + str(load_thread_two.is_active()))
 
 		# Thread 1
 		if not load_thread_one.is_active():
@@ -201,8 +204,6 @@ func load_chunks_to_radius():
 
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks(thread):
-
-	print("remove_far_chunks called.")
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
@@ -210,11 +211,9 @@ func remove_far_chunks(thread):
 			chunks.erase(chunk_key)
 			chunks_mutex.unlock()
 			chunk.queue_free() # chunk.call_deferred("free")
-	print("Queueing destruction of destroy_thread")
-	call_deferred("thread_done")
+	call_deferred("thread_done", thread)
 
 func thread_done(thread):
-	print("Destroy thread joined back up with main.")
 	thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
