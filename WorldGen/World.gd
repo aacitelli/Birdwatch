@@ -2,7 +2,7 @@ extends Spatial
 
 # Chunk-related constants
 const chunk_size = 16 # Has to be a float
-const chunk_load_radius = 4
+const chunk_load_radius = 16
 const num_vertices_per_chunk = 4 # Has to be a float
 
 # Height & Moisture Map Generation
@@ -92,22 +92,15 @@ func _process(_delta):
 	var changed_chunks_this_frame = false
 	var new_player_pos = Vector2(floor($Player.translation.x / chunk_size), floor($Player.translation.z / chunk_size))
 	if new_player_pos != player_pos:
-		changed_chunks_this_frame = true
-	player_pos = new_player_pos
-
-	# Updating variables conditional on entering a new frame
-	if changed_chunks_this_frame:
+		# print("Player changed chunks this frame.")
 		chunk_load_index = 0 # Start checking chunks from right on top of the player again
 		chunks_need_removed = true # Remove chunks as soon as removal thread isn't busy
+	player_pos = new_player_pos
 
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
-		print("Chunks need removed.")
-		if not destroy_thread.is_active():
-			print("Starting remove_far_chunks.")
-			var _error = destroy_thread.start(self, "remove_far_chunks", destroy_thread)
-		else:
-			print("Destroy thread was busy!")
+		remove_far_chunks()
+		chunks_need_removed = false
 
 	# Needs called after our check for chunk changes
 	if not currently_generating_chunks:
@@ -118,7 +111,7 @@ func generate_chunk(args_arr):
 	# This is a thread function, meaning to pass in more than one parameter we have to pass one array in.
 	var thread = args_arr[0]
 	var chunk_key = args_arr[1]
-	print("generate_chunk called on chunk " + str(chunk_key))
+	# print("generate_chunk called on chunk " + str(chunk_key))
 
 	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
 	if chunks.has(chunk_key):
@@ -128,13 +121,17 @@ func generate_chunk(args_arr):
 	# Actually generate the chunk
 	var chunk = Chunk.new(height_map_noise, moisture_map_noise, chunk_key, chunk_size, MAX_HEIGHT)
 	chunk.translation = Vector3(chunk.x, 0, chunk.z)
-	chunks_mutex.lock()
-	chunks[chunk_key] = chunk
-	chunks_mutex.unlock()
 
 	# Queue adding to scene tree, then end the thread
-	call_deferred("add_child", chunk)
+	call_deferred("add_chunk", chunk)
 	call_deferred("load_thread_done", thread)
+
+func add_chunk(chunk):
+	# print("Adding chunk " + str(chunk.chunk_key) + " to scene tree.")
+	chunks_mutex.lock()
+	chunks[chunk.chunk_key] = chunk
+	chunks_mutex.unlock()
+	add_child(chunk)
 
 # Add chunk to tree and rejoin main thread
 func load_thread_done(thread):
@@ -203,18 +200,14 @@ func load_chunks_to_radius():
 	currently_generating_chunks = false
 
 # Removes any chunks deemed too far away from the scene
-func remove_far_chunks(thread):
+func remove_far_chunks():
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
+			chunk.queue_free();
 			chunks_mutex.lock()
-			chunks.erase(chunk_key)
+			chunks.erase(chunk.chunk_key)
 			chunks_mutex.unlock()
-			chunk.queue_free() # chunk.call_deferred("free")
-	call_deferred("thread_done", thread)
-
-func thread_done(thread):
-	thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
 func get_height(x, y, z):
