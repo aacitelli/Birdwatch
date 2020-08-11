@@ -33,10 +33,11 @@ var player_pos
 # Without threads, when we do terrain, we'd basically be locking the main thread everytime we generate a chunk, because we need to go through all of that. With threads, the chunk generation function basically waits until the main thread isn't busy and completes that function. So,
 var load_thread_one
 var load_thread_two
-var load_thread_one_done
-var load_thread_two_done
+var load_thread_one_open
+var load_thread_two_open
 signal load_thread_open
 var destroy_thread
+var destroy_thread_open
 var currently_generating_chunks
 
 # TODO: I have a lot of places where I could spread the work of one frame across several for more consistent framerate. Fix these.
@@ -64,9 +65,9 @@ func _ready():
 
 	# Set up both load threads and destroy thread (and a mutex for the *small* amount of data they share)
 	load_thread_one = Thread.new()
-	load_thread_one_done = true
+	load_thread_one_open = true
 	load_thread_two = Thread.new()
-	load_thread_two_done = true
+	load_thread_two_open = true
 	destroy_thread = Thread.new()
 	chunks_mutex = Mutex.new()
 
@@ -96,14 +97,14 @@ func _process(_delta):
 
 	# Updating variables conditional on entering a new frame
 	if changed_chunks_this_frame:
-		chunk_load_index = 0 # Start chunk gen right on top of player again
+		chunk_load_index = 0 # Start checking chunks from right on top of the player again
 		chunks_need_removed = true # Remove chunks as soon as removal thread isn't busy
 
 	# If the chunk destroy thread isn't active, and we have chunks to remove, get it done
 	if chunks_need_removed:
 		if not destroy_thread.is_active():
+			print("Starting remove_far_chunks.")
 			var _error = destroy_thread.start(self, "remove_far_chunks", destroy_thread)
-			destroy_thread.wait_to_finish()
 
 	# Needs called after our check for chunk changes
 	if not currently_generating_chunks:
@@ -112,18 +113,13 @@ func _process(_delta):
 func generate_chunk(args_arr):
 
 	# This is a thread function, meaning to pass in more than one parameter we have to pass one array in.
-	var thread_number = args_arr[0]
+	var thread = args_arr[0]
 	var chunk_key = args_arr[1]
-	print("generate_chunk called on chunk " + str(chunk_key) + " with thread number " + str(thread_number))
-
-	if thread_number == 1:
-		load_thread_one_done = false
-	else:
-		load_thread_two_done = false
+	print("generate_chunk called on chunk " + str(chunk_key))
 
 	# If this chunk has already been generated or is currently being generated, don't generate, and close down the thread
 	if chunks.has(chunk_key):
-		call_deferred("load_thread_done", thread_number)
+		call_deferred("load_thread_done", thread)
 		return
 
 	# Actually generate the chunk
@@ -132,24 +128,16 @@ func generate_chunk(args_arr):
 	chunks_mutex.lock()
 	chunks[chunk_key] = chunk
 	chunks_mutex.unlock()
-	add_child(chunk)
 
 	# Queue adding to scene tree, then end the thread
-	call_deferred("load_thread_done", thread_number)
+	call_deferred("add_child", chunk)
+	call_deferred("load_thread_done", thread)
 
 # Add chunk to tree and rejoin main thread
-func load_thread_done(thread_number):
+func load_thread_done(thread):
 
 	# Rejoin that thread with the main thread and send out the relevant signals
-	if thread_number == 1:
-		load_thread_one.wait_to_finish()
-		load_thread_one_done = true
-	else:
-		load_thread_two.wait_to_finish()
-		load_thread_two_done = true
-
-	# Returns execution back to the chunk loading thread, which then
-	# uses the booleans assigned above to decide on a thread to start the next chunk on
+	thread.wait_to_finish()
 	emit_signal("load_thread_open")
 
 # Retrieve chunk at specified coordinate
@@ -187,28 +175,22 @@ func load_chunks_to_radius():
 	# I want to be able to continually
 	while chunk_load_index < chunk_vertex_order.size():
 
-		# Thread 1
-		if load_thread_one_done:
+		print("Iteration.")
+		print("Thread 1 Active: " + str(load_thread_one.is_active()))
+		print("Thread 2 Active: " + str(load_thread_two.is_active()))
 
-			# Debug
-			if load_thread_one.is_active():
-				print("Tried to call generate_chunk on thread one when it was busy generating something else!")
+		# Thread 1
+		if not load_thread_one.is_active():
 
 			# Generate a chunk using this thread
-			load_thread_one_done = false
-			var _error = load_thread_one.start(self, "generate_chunk", [1, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
+			var _error = load_thread_one.start(self, "generate_chunk", [load_thread_one, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
 			chunk_load_index += 1
 
 		# Thread 2
-		if load_thread_two_done and chunk_load_index < chunk_vertex_order.size():
-
-			# Debug
-			if load_thread_two.is_active():
-				print("Tried to call generate_chunk on thread two when it was busy generating something else!")
+		if not load_thread_two.is_active() and chunk_load_index < chunk_vertex_order.size():
 
 			# Generate a chunk using this thread
-			load_thread_two_done = false
-			var _error = load_thread_two.start(self, "generate_chunk", [2, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
+			var _error = load_thread_two.start(self, "generate_chunk", [load_thread_two, Vector2(player_pos.x + chunk_vertex_order[chunk_load_index].x, player_pos.y + chunk_vertex_order[chunk_load_index].y)])
 			chunk_load_index += 1
 
 		# This signal is emitted whenever either thread is done. We also change a variable to signify which of them is done.
@@ -219,6 +201,8 @@ func load_chunks_to_radius():
 
 # Removes any chunks deemed too far away from the scene
 func remove_far_chunks(thread):
+
+	print("remove_far_chunks called.")
 	for chunk in chunks.values():
 		var chunk_key = chunk.chunk_key
 		if chunk_key.distance_to(player_pos) > chunk_load_radius:
@@ -226,9 +210,11 @@ func remove_far_chunks(thread):
 			chunks.erase(chunk_key)
 			chunks_mutex.unlock()
 			chunk.queue_free() # chunk.call_deferred("free")
+	print("Queueing destruction of destroy_thread")
 	call_deferred("thread_done")
 
 func thread_done(thread):
+	print("Destroy thread joined back up with main.")
 	thread.wait_to_finish()
 
 # Master function that takes noise in range [-1, 1] and spits out its exact height in the world. Located here for SpoC
